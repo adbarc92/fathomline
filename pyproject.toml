@@ -1,0 +1,91 @@
+[project]
+name = "fathomline"
+version = "0.0.1"
+description = "An evaluation harness for learned robot policies: fail-closed statistical gates and out-of-envelope flagging."
+requires-python = ">=3.12"
+dependencies = []
+
+# The real fixture (D1/D2): pinned exactly, because results are bound to the LeRobot
+# version (spike finding 4). An extra rather than a dependency, so the unit and lint
+# jobs, and Windows development against the fake, never install a simulator. Linux
+# only, like LIBERO itself; it is installed in the container (`--extra lerobot`).
+[project.optional-dependencies]
+#
+# torch and torchvision are listed only so `[tool.uv.sources]` below can route them
+# to the CPU index: uv applies sources to direct dependencies, not transitive ones.
+# Their versions are LeRobot's to constrain and the lock's to fix.
+lerobot = [
+    "lerobot[smolvla,libero,evaluation]==0.6.1; sys_platform == 'linux'",
+    "torch; sys_platform == 'linux'",
+    "torchvision; sys_platform == 'linux'",
+]
+
+[project.scripts]
+fathomline = "fathomline.cli:run"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+    "ruff>=0.6.0",
+    "mypy>=1.11.0",
+]
+
+# CPU torch (D2). PyPI's Linux torch wheel is the CUDA build, which would put
+# gigabytes of nvidia-* wheels in an image that never sees a GPU.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+torchvision = [{ index = "pytorch-cpu" }]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fathomline"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+# Coverage is the *secondary* metric — criteria traceability is primary — but it
+# is the one that catches a line nobody thought about, which is a different
+# failure from a criterion nobody wrote a test for.
+[tool.coverage.run]
+branch = true
+source = ["fathomline"]
+# `__main__.py` is exercised by a test that spawns a real subprocess, which the
+# tracer in this process cannot see. Counting it would report 0% for a path that
+# is in fact tested, so it is excluded here and covered there instead.
+#
+# `adapters/lerobot/adapter.py` is omitted too (D11): it imports torch and LeRobot at
+# module level, a Linux-only stack the unit job does not install, so the tracer here
+# can never run a line of it. The CI `container` job runs it end to end instead, on
+# every PR that can change it. Nothing else in `adapters/lerobot/` needs that stack
+# (`pins.py` and `warm.py` are standard library plus a lazily imported Hub client),
+# so they stay under this gate.
+omit = ["*/fathomline/__main__.py", "*/fathomline/adapters/lerobot/adapter.py"]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+skip_covered = false
+
+# The pragma policy, stated rather than left to habit:
+#
+#   * Every `# pragma: no cover` carries a reason on the same line. A bare
+#     pragma asserts that a line needs no test, and an unexplained assertion is
+#     what this gate exists to stop.
+#   * The entries below are structural exclusions, not judgements about
+#     individual lines: `if __name__ == "__main__"` cannot run under the
+#     importing test process, and `if TYPE_CHECKING` never executes at runtime.
+#   * Anything else needs the inline pragma *and* survives review on its reason.
+exclude_also = [
+    'if __name__ == .__main__.:',
+    'if TYPE_CHECKING:',
+]

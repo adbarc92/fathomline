@@ -1,0 +1,22 @@
+# Repository-wide lint configuration, kept in `ruff.toml` rather than in
+# pyproject.toml so the lint contract stays one file for every Python file here.
+
+line-length = 100
+target-version = "py312"
+# `docs` holds snippets recorded as they were run; reformatting them would edit the record.
+extend-exclude = [".venv", "build", "dist", "docs"]
+
+[lint]
+select = [
+    "E",   # pycodestyle
+    "F",   # pyflakes
+    "I",   # import order
+    "UP",  # pyupgrade
+    "B",   # bugbear
+    "SIM", # simplify
+    "RUF",
+]
+
+[lint.per-file-ignores]
+# Tests may assert on privates and use fixtures that shadow builtins.
+"tests/*" = ["S101"]

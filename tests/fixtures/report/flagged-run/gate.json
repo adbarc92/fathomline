@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "passed": false,
+  "successes": 3,
+  "n": 4,
+  "min_n": 30,
+  "threshold": 0.8,
+  "lower_bound": 0.1941
+}

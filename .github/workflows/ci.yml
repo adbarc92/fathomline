@@ -1,0 +1,192 @@
+# Fathomline CI.
+#
+# Three jobs, each meaning one thing:
+#
+#   unit       the test suite, with the 100% line+branch coverage gate
+#   lint       ruff + ruff format + mypy --strict
+#   container  the image builds, and one real episode of the pinned fixture
+#              (SmolVLA on LIBERO) runs inside it and exits 0
+#
+# `container` is separate because a failure there means "the shipped artifact is
+# broken", which is a different response from "a line is uncovered". It is also
+# the gate's own acceptance criterion. Per D7 it runs on every push to main and
+# on any PR that touches what the image or the eval path is built from; other
+# PRs skip its steps, and the job says so in its log.
+#
+# A job that always passes is worse than no job, because it reads as coverage.
+# Nothing here is stubbed: when the eval loop lands, its jobs get added then.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen --group dev
+      - run: uv run pytest --cov=fathomline --cov-report=term-missing
+
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen --group dev
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy
+
+  container:
+    runs-on: ubuntu-24.04
+    # A healthy job takes 5-6 min from cache and under 9 min cold (build 133 s, push
+    # 195 s, eval 185-236 s). 25 is ~3x the cold run, so a simulator or EGL hang
+    # fails in 25 minutes instead of holding a runner for the default 6 hours.
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      # The GHCR image cache (D7, D13). Fork PRs get a read-only token and skip the
+      # login and push steps below; they still build and run the image locally.
+      packages: write
+    env:
+      IMAGE: ghcr.io/adbarc92/fathomline
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # A PR checks out its merge commit; its first parent is the base branch.
+          fetch-depth: 2
+
+      - name: Decide whether this change needs the container smoke (D7)
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"; echo "push to main: always run"; exit 0
+          fi
+          changed=$(git diff --name-only HEAD^1 HEAD)
+          echo "$changed"
+          if echo "$changed" | grep -qE '^(Dockerfile|\.dockerignore|uv\.lock|pyproject\.toml|\.github/workflows/|src/fathomline/(adapters/|core/|cli\.py|__init__\.py|__main__\.py))'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::container smoke skipped: nothing the image or the eval path is built from changed"
+          fi
+
+      # The determinism claim (D9) is scoped to x86_64 CPU, and the action hash has
+      # been seen to differ between runners with identical images. The CPU model is
+      # what tells those runs apart, so every run records it.
+      - name: Runner CPU
+        if: steps.changes.outputs.run == 'true'
+        run: |
+          lscpu | grep -E '^(Vendor ID|Model name|CPU\(s\)):'
+          for flag in avx2 avx512f amx_tile; do
+            echo "$flag: $(grep -qw "$flag" /proc/cpuinfo && echo yes || echo no)"
+          done
+
+      # The image is about 6.6 GB and the runner disk is 14 GB, so drop preinstalled
+      # toolchains this job never uses before building.
+      - name: Free disk
+        if: steps.changes.outputs.run == 'true'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+
+      - name: Disk before the build
+        if: steps.changes.outputs.run == 'true'
+        run: df -h / && docker system df
+
+      # Login and push only where the token can write: a push to main, or a PR from a
+      # branch of this repository. A fork PR's token cannot push to GHCR.
+      - uses: docker/login-action@v3
+        if: >-
+          steps.changes.outputs.run == 'true' &&
+          (github.event_name == 'push' ||
+           github.event.pull_request.head.repo.full_name == github.repository)
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Choose tags
+        if: steps.changes.outputs.run == 'true'
+        id: tags
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "tag=pr-${{ github.event.number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=main" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Inline cache: the pushed image carries its own layer cache, so the next
+      # build pulls the dependency and Hub-snapshot layers instead of rebuilding them.
+      # A missing cache image (the first build) is a warning, not a failure.
+      - name: Build
+        if: steps.changes.outputs.run == 'true'
+        run: |
+          start=$(date +%s)
+          docker build \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            --cache-from "$IMAGE:main" \
+            --cache-from "$IMAGE:${{ steps.tags.outputs.tag }}" \
+            -t "$IMAGE:${{ steps.tags.outputs.tag }}" \
+            -t "$IMAGE:sha-${{ github.sha }}" \
+            .
+          echo "build took $(( $(date +%s) - start )) s"
+          docker image ls "$IMAGE"
+          echo "image size: $(docker image inspect -f '{{.Size}}' "$IMAGE:${{ steps.tags.outputs.tag }}") bytes"
+
+      - name: Disk after the build
+        if: steps.changes.outputs.run == 'true'
+        run: df -h / && docker system df
+
+      # Pushed before the smoke, so a failing smoke can be re-run from the cache.
+      # `:main` only ever comes from a push to main.
+      - name: Push to the GHCR cache
+        if: >-
+          steps.changes.outputs.run == 'true' &&
+          (github.event_name == 'push' ||
+           github.event.pull_request.head.repo.full_name == github.repository)
+        run: |
+          start=$(date +%s)
+          docker push "$IMAGE:${{ steps.tags.outputs.tag }}"
+          echo "push took $(( $(date +%s) - start )) s"
+
+      - name: The entry point runs on the image
+        if: steps.changes.outputs.run == 'true'
+        run: docker run --rm "$IMAGE:sha-${{ github.sha }}" --version
+
+      # The lane's done-criterion: one real episode, offline, exits 0. Success or
+      # failure of the episode is the gate's call, not this job's; the job asserts
+      # the run completed and produced one schema-v1 episode. The result is printed
+      # to the log rather than uploaded: an artifact upload depends on the account's
+      # Actions storage quota, which is a reason to fail this job that says nothing
+      # about the image.
+      - name: eval --episodes 1 (SmolVLA on LIBERO libero_object task 0)
+        if: steps.changes.outputs.run == 'true'
+        run: |
+          start=$(date +%s)
+          docker run --rm --network none "$IMAGE:sha-${{ github.sha }}" eval --episodes 1 > result.json
+          echo "eval took $(( $(date +%s) - start )) s"
+          cat result.json
+          python3 - <<'PY'
+          import json
+          document = json.load(open("result.json"))
+          assert document["schema_version"] == 1, document["schema_version"]
+          (episode,) = document["episodes"]
+          assert episode["seed"] == 1000 and episode["steps"] >= 1, episode
+          print("episode:", {k: episode[k] for k in ("seed", "steps", "success", "max_reward")})
+          PY

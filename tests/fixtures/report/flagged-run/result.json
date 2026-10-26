@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "manifest": {
+    "fathomline_version": "0.0.1",
+    "policy": {"name": "fixture-policy", "revision": "hand-written"},
+    "env": {"name": "fixture-env", "revision": "hand-written"},
+    "seeds": [0, 1, 2, 3],
+    "max_steps": 300,
+    "python_version": "3.12.5",
+    "platform": "Linux-x86_64"
+  },
+  "episodes": [
+    {"seed": 0, "steps": 120, "success": true, "sum_reward": 1.0, "max_reward": 1.0,
+     "action_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "flags": []},
+    {"seed": 1, "steps": 300, "success": false, "sum_reward": 0.0, "max_reward": 0.0,
+     "action_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "flags": []},
+    {"seed": 2, "steps": 95, "success": true, "sum_reward": 1.0, "max_reward": 1.0,
+     "action_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "flags": [{"monitor": "action-bounds", "step": 41, "reason": "joint 3 command 2.4 outside [-2.0, 2.0]"}]},
+    {"seed": 3, "steps": 101, "success": true, "sum_reward": 1.0, "max_reward": 1.0,
+     "action_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "flags": []}
+  ]
+}
