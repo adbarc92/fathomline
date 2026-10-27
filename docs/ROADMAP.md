@@ -65,8 +65,8 @@ him for more than a ruling.
 
 | Step | Work | Alex |
 |---|---|---|
-| Done | Lanes 0, A, C, D, F | — |
-| Next | E runs; B on the real adapter | **Rule D9; rule D10 from lane E's data** |
+| Done | Lanes 0, A, C, D, F; B built and approved (PR #1; merges once the GHCR push permission is fixed) | — |
+| Next | E runs | **Rule D9a (evidence in STATUS and PR #1); rule D10 from lane E's data** |
 | Then | G; H begins; publish the first result | Merges |
 | To 2026-11-09 | Integration and hardening; G0.1-early, full G0.1 if the monitors are green | Merges |
 
