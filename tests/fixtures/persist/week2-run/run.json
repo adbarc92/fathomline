@@ -10,18 +10,29 @@
   },
   "started_at": "2026-10-26T00:00:00Z",
   "episode_durations": [
-    0.0001162998378276825
+    0.25
   ],
   "host": {
-    "platform": "Windows-11-10.0.26200-SP0",
-    "machine": "AMD64",
-    "cpu_model": "AMD64 Family 25 Model 33 Stepping 0, AuthenticAMD",
-    "cpu_flags": [],
-    "logical_cpus": 16,
-    "usable_cpus": null,
-    "python_version": "3.12.10",
-    "threading_env": {},
-    "torch": null
+    "platform": "Linux-fixture-x86_64",
+    "machine": "x86_64",
+    "cpu_model": "fixture CPU",
+    "cpu_flags": [
+      "avx",
+      "avx2",
+      "fma"
+    ],
+    "logical_cpus": 4,
+    "usable_cpus": 4,
+    "python_version": "3.12.0",
+    "threading_env": {
+      "OMP_NUM_THREADS": "4"
+    },
+    "torch": {
+      "version": "0.0.0+fixture",
+      "num_threads": 4,
+      "num_interop_threads": 4,
+      "cpu_capability": "AVX2"
+    }
   },
   "argv": [
     "sweep",

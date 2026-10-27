@@ -158,9 +158,11 @@ def test_a_run_directory_that_appears_during_the_sweep_is_not_overwritten(
     code = sweep_command.run(
         args, fixture_installed=lambda: True, load_fixture=loads_then_collides, argv=["sweep"]
     )
-    assert code == EXIT_NOT_RUN
+    assert code == sweep_command.EXIT_NOT_PERSISTED
     assert list(run_dir.iterdir()) == []
-    assert "never overwritten" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "ran but was not persisted" in err
+    assert "never overwritten" in err
 
 
 @pytest.mark.skipif(

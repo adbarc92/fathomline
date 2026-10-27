@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import math
 import os
 import shutil
+import struct
 import sys
 import types
 from collections.abc import Callable, Iterator
@@ -407,9 +409,19 @@ def _reseeded(document: dict[str, object]) -> None:
 
 
 def _first_action_nudged(document: dict[str, object]) -> None:
+    """The last bit of the first action's first float, flipped."""
     actions = document["actions"]
     assert isinstance(actions, list)
-    actions[0][0] += 1e-12
+    raw = bytearray.fromhex(actions[0])
+    raw[0] ^= 1
+    actions[0] = raw.hex()
+
+
+def _episode_dropped(document: dict[str, object]) -> None:
+    """A result whose episodes no longer match its own manifest."""
+    episodes = document["episodes"]
+    assert isinstance(episodes, list)
+    del episodes[-1]
 
 
 @pytest.mark.parametrize(
@@ -425,8 +437,11 @@ def _first_action_nudged(document: dict[str, object]) -> None:
         (RUN_FILENAME, _set("episode_durations", [1.0]), "1 episode durations for 3 episodes"),
         (f"{TRAJECTORIES_DIRNAME}/1000.json", _first_action_nudged, "the actions hash to"),
         (f"{TRAJECTORIES_DIRNAME}/1000.json", _set("seed", 1001), "of seed 1001"),
-        (f"{TRAJECTORIES_DIRNAME}/1000.json", _set("actions", [[0.0]]), "got 1 of seed 1000"),
+        (f"{TRAJECTORIES_DIRNAME}/1000.json", _set("actions", ["00" * 8]), "got 1 of seed 1000"),
         (f"{TRAJECTORIES_DIRNAME}/1000.json", _set("actions", [["x"]]), "malformed trajectory"),
+        (f"{TRAJECTORIES_DIRNAME}/1000.json", _set("actions", ["zz"]), "malformed trajectory"),
+        (f"{TRAJECTORIES_DIRNAME}/1000.json", _set("actions", ["00"]), "malformed trajectory"),
+        (RESULT_FILENAME, _episode_dropped, "has episodes for seeds"),
         (f"{TRAJECTORIES_DIRNAME}/1000.json", _drop("actions"), "malformed trajectory"),
     ],
 )
@@ -437,6 +452,48 @@ def test_an_inconsistent_run_directory_is_refused(
     _tamper(run_dir, name, edit)
     with pytest.raises(RunDirError, match=message):
         read_run(run_dir)
+
+
+class _Emits:
+    """A policy that emits fixed actions: here, the ones JSON cannot carry as numbers."""
+
+    ref = FakePolicy.ref
+
+    def __init__(self, action: tuple[float, ...]) -> None:
+        self._action = action
+
+    def reset(self, seed: int) -> None:
+        del seed
+
+    def act(self, observation: object) -> tuple[float, ...]:
+        del observation
+        return self._action
+
+
+# x86's default NaN (sign bit set), as `0 * inf` produces it; JSON's NaN reads back as +NaN.
+NEGATIVE_NAN = struct.unpack("<d", bytes.fromhex("000000000000f8ff"))[0]
+
+
+@pytest.mark.parametrize("action", [(NEGATIVE_NAN, 1.0), (math.inf, -math.inf), (-0.0, 0.0)])
+def test_any_action_reads_back_bit_for_bit(tmp_path: Path, action: tuple[float, ...]) -> None:
+    """A run with a NaN action is exactly the run a monitor must be able to look at later."""
+    sweep = run_sweep(FakeEnv(success_rate=1.0), _Emits(action), seeds=SEEDS, max_steps=10)
+    persisted = read_run(_write(tmp_path / "run", sweep))
+    packed = [struct.pack("<2d", *a) for t in persisted.trajectories for a in t]
+    assert packed == [struct.pack("<2d", *action)] * len(packed)
+    assert compare_runs(persisted.result, sweep.result) == ()
+
+
+def test_a_directory_that_would_not_read_back_is_never_renamed_into_place(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def corrupt(action: tuple[float, ...]) -> str:
+        return "00"
+
+    monkeypatch.setattr("fathomline.persist.rundir._encode", corrupt)
+    with pytest.raises(RunDirError, match="malformed trajectory"):
+        _write(tmp_path / "run")
+    assert not (tmp_path / "run").exists()
 
 
 def test_a_missing_trajectory_is_refused(tmp_path: Path) -> None:
@@ -521,10 +578,24 @@ def test_host_facts_are_not_compared() -> None:
     assert compare_runs(left, right) == ()
 
 
+def test_floats_are_compared_bit_for_bit() -> None:
+    """As the action hash compares them: NaN equals itself, 0.0 is not -0.0."""
+    nan = _episode(sum_reward=math.nan)
+    assert compare_runs(_run(nan), _run(nan)) == ()
+    (difference,) = compare_runs(_run(_episode(max_reward=0.0)), _run(_episode(max_reward=-0.0)))
+    assert difference.startswith("seed 1: max_reward")
+
+
+def test_episodes_out_of_step_with_their_manifest_are_a_difference() -> None:
+    left = _run(_episode(seed=1), _episode(seed=2))
+    right = dataclasses.replace(left, episodes=tuple(reversed(left.episodes)))
+    assert compare_runs(left, right) == ("episode seeds: (1, 2) != (2, 1)",)
+
+
 def test_a_different_fixture_or_seed_set_is_a_difference() -> None:
     other = _run(_episode(seed=2), max_steps=99)
     differences = compare_runs(_run(_episode()), other)
-    assert [d.split(":")[0] for d in differences] == ["max_steps", "seeds"]
+    assert [d.split(":")[0] for d in differences] == ["max_steps", "seeds", "episode seeds"]
 
 
 def test_first_divergence_locates_the_step() -> None:
@@ -533,3 +604,4 @@ def test_first_divergence_locates_the_step() -> None:
     assert first_divergence(a, [a[0], (0.5, 0.75), a[2]]) == Divergence(step=1, max_abs_diff=0.25)
     assert first_divergence(a, [a[0], (0.5,)]) == Divergence(step=1, max_abs_diff=None)
     assert first_divergence(a, a[:2]) == Divergence(step=2, max_abs_diff=None)
+    assert first_divergence([(math.nan,)], [(math.nan,)]) is None

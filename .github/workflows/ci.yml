@@ -81,7 +81,7 @@ jobs:
           fi
           changed=$(git diff --name-only HEAD^1 HEAD)
           echo "$changed"
-          if echo "$changed" | grep -qE '^(Dockerfile|\.dockerignore|uv\.lock|tests\.lock|pyproject\.toml|\.github/workflows/|src/fathomline/(adapters/|core/|cli\.py|__init__\.py|__main__\.py))'; then
+          if echo "$changed" | grep -qE '^(Dockerfile|\.dockerignore|uv\.lock|tests\.lock|pyproject\.toml|\.github/workflows/|src/fathomline/(adapters/|core/|persist/|cli\.py|__init__\.py|__main__\.py))'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
@@ -207,9 +207,12 @@ jobs:
           docker run --rm -i --network none -v "$PWD/runs:/app/runs" --entrypoint python \
             "$IMAGE:sha-${{ github.sha }}" - <<'PY'
           from pathlib import Path
-          from fathomline.persist import compare_runs, read_run
+          from fathomline.persist import compare_runs, first_divergence, read_run
           first, second = (read_run(Path("runs", name)) for name in ("first", "second"))
           differences = compare_runs(first.result, second.result)
           print("\n".join(differences) or "equal: every episode's metrics and action hash")
+          for seed, a, b in zip(first.result.manifest.seeds, first.trajectories, second.trajectories):
+              if (divergence := first_divergence(a, b)) is not None:
+                  print(f"seed {seed}: trajectories first differ at {divergence}")
           raise SystemExit(1 if differences else 0)
           PY

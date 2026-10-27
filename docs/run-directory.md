@@ -24,13 +24,15 @@ In the container, mount a directory to keep the run:
 
 | File | Versioned by | Varies between two runs of one seed set on one host? |
 |---|---|---|
-| `result.json` | `schema_version` (`fathomline.core.schema`, currently 1) | **No.** Same bytes |
+| `result.json` | `schema_version` (`fathomline.core.schema`, currently 1) | **Expected not to:** the same bytes. Shown on the fake by the tests and on the smoke set by the CI container job, each on one host |
 | `run.json` | `run_schema_version` (`fathomline.persist.rundir`, currently 1) | Yes: `started_at`, `episode_durations`, `argv` |
 | `trajectories/<seed>.json` | the `result.json` beside it (each must hash to its episode's `action_hash`) | No |
 
-A directory is written under a temporary name (`.<name>.partial`) and renamed into place when
-complete, so a run directory that exists is a whole run. An existing directory is never
-overwritten. The directory does not depend on its own path: it can be copied or published as is.
+A directory is written under a temporary name (`.<name>.partial`), read back with `read_run`, and
+only then renamed into place, so a run directory that exists is a whole run that reads. An
+existing directory is never overwritten. Files are not fsynced: a power loss just after the rename
+could still truncate one, and `read_run` would then refuse the directory. The directory does not
+depend on its own path: it can be copied or published as is.
 
 ## `result.json`
 
@@ -72,9 +74,12 @@ platform) and one entry per episode (`seed`, `steps`, `success`, `sum_reward`, `
 
 ## `trajectories/<seed>.json`
 
-`{"seed": 1000, "actions": [[a0, a1, …], …]}`, one action per step. Floats are written as Python's
-`repr`, which reads back to the same bits, so the actions recompute the episode's `action_hash`
-exactly (`fathomline.core.loop.action_hash`). When two runs disagree on a hash, comparing their
+`{"seed": 1000, "actions": ["<hex>", …]}`, one string per step: the action's float64s,
+little-endian, as hex, which are exactly the bytes `fathomline.core.loop.action_hash` hashes. A
+decimal JSON number would not do: JSON has no NaN or infinity, and Python's `NaN` extension reads
+back without its sign bit, so a policy that emits a NaN would leave a trajectory that no longer
+matched its own hash. Decode one with `struct.unpack(f"<{len(raw) // 8}d", bytes.fromhex(text))`,
+or read the whole directory with `read_run`. When two runs disagree on a hash, comparing their
 trajectories (`fathomline.persist.first_divergence`) names the first step that differs and by how
 much.
 
@@ -82,7 +87,8 @@ much.
 
 `fathomline.persist.read_run(run_dir)` returns the result, the record and the trajectories, or
 raises `RunDirError`. It refuses a directory if any file is missing or of an unknown version; if
-`run.json`'s seeds differ from the result's or do not hash to its digest; if the durations do not
+the result's episodes are not its manifest's seeds, in order; if `run.json`'s seeds differ from
+the result's or do not hash to its digest; if the durations do not
 match the episodes; or if any trajectory has the wrong seed or length, or does not hash to its
 episode's `action_hash`.
 
@@ -90,8 +96,11 @@ episode's `action_hash`.
 
 A re-run of a persisted run is the same `sweep` with the recorded `seed_set.name`, then
 `compare_runs(published.result, rerun.result)`: an empty tuple is equality on the fixture, the
-seeds, every episode's metrics and its action hash (D9), never video. On a hash mismatch,
-`first_divergence` over the two trajectories locates it. Host facts are not compared. **Whether two
+seeds, every episode's metrics and its action hash (D9), never video. Floats are compared bit for
+bit, except that any NaN metric equals any NaN (`result.json` keeps no NaN sign). On a hash
+mismatch, `first_divergence` over the two trajectories locates it. Host facts are not compared.
+`run.json`'s `argv` is recorded verbatim, so a run launched with absolute `--lock` or `--run-dir`
+paths carries them: relativize or strip them before publishing a run. **Whether two
 hosts may be expected to agree is the open ruling D9a**; until it is ruled, the equality shown is
 run to run on one host.
 

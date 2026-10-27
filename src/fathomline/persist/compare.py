@@ -4,10 +4,17 @@ Equality is judged on the fixture, the seeds, each episode's metrics and its
 action-trajectory hash (D9), never on video. Host facts are not compared: they
 say where each run happened, and whether two hosts may be expected to agree is
 the open D9a ruling, not this module's call.
+
+Floats are compared bit for bit, as the action hash compares them, so 0.0
+differs from -0.0, with one exception: any NaN equals any NaN. Result schema v1
+writes a metric as a JSON number, which keeps no NaN sign or payload; the
+actions keep theirs, and the action hash covers them.
 """
 
 from __future__ import annotations
 
+import math
+import struct
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -30,15 +37,29 @@ def compare_runs(expected: RunResult, actual: RunResult) -> tuple[str, ...]:
         )
         if left != right
     ]
-    if a.seeds != b.seeds:
+    left_seeds = tuple(episode.seed for episode in expected.episodes)
+    right_seeds = tuple(episode.seed for episode in actual.episodes)
+    if left_seeds != right_seeds:
+        differences.append(f"episode seeds: {left_seeds!r} != {right_seeds!r}")
+    if a.seeds != b.seeds or left_seeds != right_seeds:
         # Episodes are only comparable seed for seed.
         return tuple(differences)
     for left, right in zip(expected.episodes, actual.episodes, strict=True):
         for name in EPISODE_FIELDS:
             left_value, right_value = getattr(left, name), getattr(right, name)
-            if left_value != right_value:
+            if not _same(left_value, right_value):
                 differences.append(f"seed {left.seed}: {name} {left_value!r} != {right_value!r}")
     return tuple(differences)
+
+
+def _same(left: object, right: object) -> bool:
+    if isinstance(left, float) and isinstance(right, float):
+        if math.isnan(left) and math.isnan(right):
+            return True
+        return struct.pack("<d", left) == struct.pack("<d", right)
+    if isinstance(left, tuple) and isinstance(right, tuple):
+        return len(left) == len(right) and all(map(_same, left, right))
+    return left == right
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,7 +75,7 @@ class Divergence:
 def first_divergence(expected: Sequence[Action], actual: Sequence[Action]) -> Divergence | None:
     """The first step at which two trajectories differ, or None if they are identical."""
     for step, (left, right) in enumerate(zip(expected, actual, strict=False)):
-        if left != right:
+        if not _same(left, right):
             if len(left) != len(right):
                 return Divergence(step=step, max_abs_diff=None)
             return Divergence(

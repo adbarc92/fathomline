@@ -5,15 +5,20 @@
       run.json                 run schema v1: the seed set, the host, timings
       trajectories/<seed>.json every action of one episode
 
-`result.json` is the measurement; the same seed set on the same host writes the
-same bytes. `run.json` is what varies run to run, or host to host, and says what
-the measurement is a measurement *on*. A trajectory hashes to its episode's
-`action_hash`, so a mismatch found by a re-run can be traced to the step where
-it began. `read_run` checks all of that before it returns anything.
+`result.json` is the measurement: the same seed set on the same host is expected
+to write the same bytes (shown on the fake by the tests, and on the smoke set by
+the CI container job, on one host each). `run.json` is what varies run to run,
+or host to host, and says what the measurement is a measurement *on*. Actions
+are stored as the exact float64 bytes the action hash is computed over, so a
+trajectory always recomputes its episode's `action_hash`, NaN included, and a
+mismatch found by a re-run can be traced to the step where it began. `read_run`
+checks all of that before it returns anything.
 
-A directory is written under a temporary name and renamed into place when
-complete, so a run directory that exists is a whole run. An existing one is
-never overwritten: a persisted result is not edited after the fact.
+A directory is written under a temporary name, read back with `read_run`, and
+only then renamed into place, so a run directory that exists is a whole run that
+reads. An existing one is never overwritten: a persisted result is not edited
+after the fact. (Files are not fsynced: a power loss right after the rename can
+still truncate one, which `read_run` would then refuse.)
 """
 
 from __future__ import annotations
@@ -22,6 +27,7 @@ import dataclasses
 import json
 import os
 import shutil
+import struct
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -101,9 +107,10 @@ def write_run(
     for episode, actions in zip(sweep.result.episodes, sweep.trajectories, strict=True):
         _write_json(
             staging / TRAJECTORIES_DIRNAME / f"{episode.seed}.json",
-            {"seed": episode.seed, "actions": [list(action) for action in actions]},
+            {"seed": episode.seed, "actions": [_encode(action) for action in actions]},
             indent=None,
         )
+    read_run(staging)  # A directory that exists must read back; refuse it here if not.
     os.replace(staging, run_dir)
     return run_dir
 
@@ -112,6 +119,12 @@ def read_run(run_dir: Path) -> PersistedRun:
     """Read a run directory back, refusing one that is incomplete or inconsistent."""
     result = _read_result(run_dir / RESULT_FILENAME)
     record = _read_record(run_dir / RUN_FILENAME)
+    ran = tuple(episode.seed for episode in result.episodes)
+    if ran != result.manifest.seeds:
+        raise RunDirError(
+            f"{run_dir}: {RESULT_FILENAME} has episodes for seeds {ran} "
+            f"but its manifest declares {result.manifest.seeds}"
+        )
     if record.seed_set.seeds != result.manifest.seeds:
         raise RunDirError(
             f"{run_dir}: {RUN_FILENAME} declares seeds {record.seed_set.seeds} "
@@ -129,8 +142,19 @@ def read_run(run_dir: Path) -> PersistedRun:
     return PersistedRun(result=result, record=record, trajectories=trajectories)
 
 
+def _encode(action: Action) -> str:
+    """The action's float64s, little-endian, as hex: the bytes `action_hash` consumes."""
+    return struct.pack(f"<{len(action)}d", *action).hex()
+
+
+def _decode(text: str) -> Action:
+    raw = bytes.fromhex(text)
+    if len(raw) % 8:
+        raise ValueError(f"{len(raw)} bytes is not a whole number of float64s")
+    return struct.unpack(f"<{len(raw) // 8}d", raw)
+
+
 def _write_json(path: Path, document: object, *, indent: int | None = 2) -> None:
-    # Floats are written as `repr` writes them, which reads back to the same bits.
     # `newline`: the same bytes on every OS, not CRLF on Windows.
     path.write_text(json.dumps(document, indent=indent) + "\n", encoding="utf-8", newline="\n")
 
@@ -208,7 +232,7 @@ def _read_record(path: Path) -> RunRecord:
 def _read_trajectory(path: Path, episode: EpisodeResult) -> tuple[Action, ...]:
     document = _read_object(path)
     try:
-        actions = tuple(tuple(float(value) for value in action) for action in document["actions"])
+        actions = tuple(_decode(action) for action in document["actions"])
     except (KeyError, TypeError, ValueError) as exc:
         raise RunDirError(f"{path}: malformed trajectory: {exc!r}") from exc
     if document.get("seed") != episode.seed or len(actions) != episode.steps:

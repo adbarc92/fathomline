@@ -8,6 +8,8 @@ stdout carries one line, the run directory's path; everything else goes to
 stderr. Exit codes:
 
 * 0 — the sweep ran and its run directory is complete;
+* 1 — the sweep ran but could not be persisted (the run directory appeared
+  while it ran); the measurement is lost and nothing was overwritten;
 * 2 — nothing was run: the seed set is not declared, the lock is invalid, or
   the run directory already exists (argparse uses 2 for usage errors too);
 * 3 — the fixture is not installed here, as for `eval`.
@@ -31,6 +33,7 @@ from fathomline.persist.host import capture_host
 from fathomline.persist.lock import DEFAULT_LOCK, LockError, seed_set
 from fathomline.persist.rundir import RunDirError, write_run
 
+EXIT_NOT_PERSISTED = 1
 EXIT_NOT_RUN = 2
 EXIT_FIXTURE_UNAVAILABLE = 3
 
@@ -100,8 +103,8 @@ def run(
             argv=argv,
         )
     except RunDirError as exc:  # The directory appeared while the sweep ran.
-        print(f"fathomline sweep: {exc}", file=sys.stderr)
-        return EXIT_NOT_RUN
+        print(f"fathomline sweep: the sweep ran but was not persisted: {exc}", file=sys.stderr)
+        return EXIT_NOT_PERSISTED
     successes = sum(episode.success for episode in sweep.result.episodes)
     print(
         f"fathomline sweep: {declared.name}: {successes}/{len(sweep.result.episodes)} succeeded",
