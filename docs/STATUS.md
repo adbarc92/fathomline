@@ -44,8 +44,17 @@ determinism) and D10 (declared envelope).** The plan and the rulings are in
     (an unrecorded CPU that ran about 3.5 times slower).
   - All three agree on the metrics: success at step 124.
   - The two CI runs were built from commits whose diff touches no numeric code.
-  - So the hash tracks the host, not the code. Variants that test thread count and kernel dispatch
-    are in PR #1's body as they finish.
+  - So the hash tracks the host, not the code.
+  - On the local host, `OMP_NUM_THREADS=1` reproduces `f2c89969…` bit for bit, and runs about 2.4
+    times slower.
+  - 2, 4 and 8 threads all give `aa18c8f3…`.
+  - `ATEN_CPU_CAPABILITY=default` gives a fourth hash, `47e31126…`, and succeeds one step earlier,
+    at step 123.
+  - `MKL_ENABLE_INSTRUCTIONS=SSE4_2` changes nothing.
+  - Reading: the hash depends on (a) one torch thread versus several, and (b) the instruction set
+    the ATen kernels dispatch to.
+    - The `f2c89969` runner was evidently running torch on one thread.
+    - `409dc548` (AVX-512, 2 threads) and `aa18c8f3` (AVX2, 2 threads) differ by ISA.
 
 **Next steps** — each points into [`ROADMAP.md`](ROADMAP.md)
 1. Owner: fix the GHCR package permission, so the `container` job runs the in-image sweep check.
