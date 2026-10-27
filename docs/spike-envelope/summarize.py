@@ -7,7 +7,8 @@ Runs on any host, against the repo's own gate code (no LeRobot needed):
 The interval is the two-sided 95% Clopper-Pearson interval (D6a). Its lower end
 is `fathomline.gates.clopper_pearson_lower`; its upper end is the same function
 by symmetry, upper(k, n) = 1 - lower(n - k, n). The shift against the baseline
-is tested with a two-sided Fisher exact test, computed from exact binomials.
+is measured on the same starts (matched on seed) and tested with a two-sided
+exact McNemar test on the discordant pairs.
 """
 
 from __future__ import annotations
@@ -63,10 +64,16 @@ def paired(base: list[dict[str, Any]], group: list[dict[str, Any]]) -> tuple[int
 
 def load(results: Path) -> dict[str, list[dict[str, Any]]]:
     rows: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    seen: set[tuple[str, int]] = set()
     for path in sorted(results.rglob("*.jsonl")):
         for line in path.read_text().splitlines():
             if line.strip():
                 row = json.loads(line)
+                key = (row["condition"], row["seed"])
+                # A rerun appends to its sink; counting an episode twice would be silent.
+                if key in seen:
+                    raise ValueError(f"duplicate episode {key} under {results}")
+                seen.add(key)
                 rows[row["condition"]].append(row)
     return rows
 
@@ -77,10 +84,9 @@ def main(argv: list[str]) -> int:
         print("no baseline rows", file=sys.stderr)
         return 1
     base = rows[BASELINE]
-    base_k, base_n = sum(r["success"] for r in base), len(base)
 
     print(
-        "| Condition | Successes | Rate | 95% CP interval | Shift vs baseline "
+        "| Condition | Successes | Rate | 95% CP interval | Shift vs baseline, same starts "
         "| Lost / gained (paired) | McNemar p |"
     )
     print("|---|---|---|---|---|---|---|")
@@ -91,7 +97,7 @@ def main(argv: list[str]) -> int:
             shift = pairs = p = "—"
         else:
             lost, gained = paired(base, group)
-            shift = f"{k / n - base_k / base_n:+.0%}"
+            shift = f"{(gained - lost) / n * 100:+.0f} pp"
             pairs = f"{lost} / {gained}"
             p = f"{mcnemar_exact(lost, gained):.2g}"
         print(

@@ -9,8 +9,10 @@ sections are a recommendation, not a ruling._
 - **Small perturbations break the fixture.** Dim lights, camera noise and 5 cm object shifts
   each cut success from about 50% to 7–10%. A camera mix-up, lost action stats and another
   task's instruction each cut it to 0/30.
-- **The fixture is a 54% policy, not a 95% one.** The baseline is 27/50, with an interval of
-  [0.39, 0.68]. LeRobot's own eval loop agrees on the same starts (6/10 against 7/10).
+- **The fixture is a 54% policy, not the ~95% that LIBERO-Plus reports for VLAs on standard
+  LIBERO.** The baseline is 27/50, with an interval of [0.39, 0.68]. LeRobot's own eval loop,
+  run on the same loaded objects and seeds 1000–1009, got 6/10 against the harness's 7/10. That
+  cross-check script is not committed.
 - **Only one fault leaves a trace in the actions.** Lost action stats push the arm to 2.3–2.7
   on every episode. In the one episode traced, the arm passed ±1 at step 5. In every other
   condition the policy fails while its actions look normal. An action-bound monitor is a
@@ -42,13 +44,15 @@ enter.
 
 **Episodes.** The baseline ran 50 episodes: seeds 1000–1049, which are the task's 50 benchmark
 init states, once each. Each perturbation ran 30 episodes on the same first 30 starts, so every
-comparison is paired. Thirty was fixed before any result came in. It is enough to separate a
+comparison is paired. Thirty was fixed before the full run, after a one-episode smoke test of
+each hook. It is enough to separate a
 collapse from no effect: 0/30 has an upper bound of 0.12. It also kept the run to about 13
 episode-hours (290 episodes) instead of about 20.
 
 **Statistics.** Each rate carries its two-sided 95% Clopper-Pearson interval (D6a). The lower end
 comes from the repo's `clopper_pearson_lower`. The shift is tested with an exact McNemar test on
-the paired starts. On those 30 starts the baseline is 15/30.
+the paired starts. On those 30 starts the baseline is 15/30, so the shift column is measured
+against 50%, in percentage points.
 
 **Host.** A Ryzen 7 5800X (8 cores, 16 threads) under Docker Desktop. Up to four containers ran
 at once, each pinned to 4 logical CPUs. Those CPUs are hyperthreads, so the times here are not
@@ -56,17 +60,17 @@ CI runner times. The median episode took 92 s when it succeeded and 187 s when i
 
 ## Success rate per condition
 
-| Condition | Successes | Rate | 95% CP interval | Shift vs baseline | Lost / gained (paired) | McNemar p |
+| Condition | Successes | Rate | 95% CP interval | Shift vs baseline, same starts | Lost / gained (paired) | McNemar p |
 |---|---|---|---|---|---|---|
 | `baseline` | 27/50 | 54% | [0.39, 0.68] | — | — | — |
-| `camera_swap` | 0/30 | 0% | [0.00, 0.12] | -54% | 15 / 0 | 6.1e-05 |
-| `unnorm_identity` | 0/30 | 0% | [0.00, 0.12] | -54% | 15 / 0 | 6.1e-05 |
-| `instruction_other` | 0/30 | 0% | [0.00, 0.12] | -54% | 15 / 0 | 6.1e-05 |
-| `noise` | 2/30 | 7% | [0.01, 0.22] | -47% | 13 / 0 | 0.00024 |
-| `light_dim` | 3/30 | 10% | [0.02, 0.27] | -44% | 13 / 1 | 0.0018 |
-| `init_shift` | 3/30 | 10% | [0.02, 0.27] | -44% | 14 / 2 | 0.0042 |
-| `light_bright` | 8/30 | 27% | [0.12, 0.46] | -27% | 10 / 3 | 0.092 |
-| `instruction_paraphrase` | 18/30 | 60% | [0.41, 0.77] | +6% | 2 / 5 | 0.45 |
+| `camera_swap` | 0/30 | 0% | [0.00, 0.12] | -50 pp | 15 / 0 | 6.1e-05 |
+| `unnorm_identity` | 0/30 | 0% | [0.00, 0.12] | -50 pp | 15 / 0 | 6.1e-05 |
+| `instruction_other` | 0/30 | 0% | [0.00, 0.12] | -50 pp | 15 / 0 | 6.1e-05 |
+| `noise` | 2/30 | 7% | [0.01, 0.22] | -43 pp | 13 / 0 | 0.00024 |
+| `light_dim` | 3/30 | 10% | [0.02, 0.27] | -40 pp | 13 / 1 | 0.0018 |
+| `init_shift` | 3/30 | 10% | [0.02, 0.27] | -40 pp | 14 / 2 | 0.0042 |
+| `light_bright` | 8/30 | 27% | [0.12, 0.46] | -23 pp | 10 / 3 | 0.092 |
+| `instruction_paraphrase` | 18/30 | 60% | [0.41, 0.77] | +10 pp | 2 / 5 | 0.45 |
 
 Seven of eight perturbations hurt. Six are clear collapses. `light_bright` probably hurts, but
 30 episodes cannot confirm it (p = 0.09). The paraphrase shows no detectable change. Under task
@@ -77,8 +81,8 @@ differs from LIBERO-Plus's finding that VLAs largely ignore language.
 
 The action is 6 arm deltas and a gripper command. LIBERO's action space is [-1, 1] on each, and
 the robot controller clips to it. The training range is each dimension's [min, max] over the
-fine-tune's training actions, from the checkpoint's own stats (arm translation ±0.94, gripper
-±1).
+fine-tune's training actions, from the checkpoint's own stats: translation ±0.94 on x, y and
+z; rotation about [-0.26, 0.36], [-0.38, 0.38] and [-0.37, 0.38]; gripper ±1.
 
 | Condition | Gripper beyond ±1: episodes (steps) | Arm beyond train range | Arm beyond ±1 | Arm beyond ±1.1 | Arm peak, per-episode range | Gripper peak |
 |---|---|---|---|---|---|---|
@@ -94,8 +98,8 @@ fine-tune's training actions, from the checkpoint's own stats (arm translation �
 
 - **The gripper carries no signal.** It overshoots ±1 on most steps of every condition, clean or
   not, and peaks at 1.06–1.12 everywhere. A gripper bound would flag every healthy run.
-- **The training range is too tight.** Clean runs leave it in 38 of 50 episodes, by about 0.01
-  to 0.06.
+- **The training range is too tight.** Clean runs leave it in 38 of 50 episodes, always on the
+  z translation, by up to 0.07 (1.01 against 0.94).
 - **A strict ±1 on the arm is almost right.** It flags 3 of 50 clean episodes (peak 1.01).
 - **±1.1 on the arm separates cleanly here:** 30/30 for lost stats, 0 of 260 other episodes.
   That margin was picked after seeing these data. A ruling should fix it before Lane G measures.
@@ -105,10 +109,10 @@ fine-tune's training actions, from the checkpoint's own stats (arm translation �
 ## Observation statistics
 
 Two numbers per episode come from the first third-person frame the policy sees. One is mean
-brightness. The other is a high-frequency energy, the mean absolute difference between
-neighbouring pixels, which noise raises. "Flagged" means outside the baseline's range, widened by
-10%. The band is calibrated on the same baseline it is scored on, so zero false alarms is
-optimistic.
+brightness. The other is a high-frequency energy, the mean absolute difference between neighbouring
+pixels, which noise raises. "Flagged" means outside the baseline's range, with each end moved out by
+10% of its value (brightness band about 92 to 113). The band is calibrated on the same baseline it
+is scored on, so zero false alarms is optimistic.
 
 | Condition | Frame-0 brightness | Frame-0 noise | Flagged by the frame band |
 |---|---|---|---|
@@ -156,8 +160,8 @@ follows its instruction.
    checks. This experiment's fault lived in memory, after load.
 2. **Action out of bounds — in, arm only, at a declared margin.** It costs nothing and caught the
    gross metadata fault on every episode, by step 5 in the one traced. The gripper must be
-   excluded, and the training range must not be the bound. It will **not** catch observation shift, so it backs up item 1 and does not
-   replace item 3. A subtle metadata swap, like the published sibling-key case, may stay inside
+   excluded, and the training range must not be the bound. It will **not** catch observation
+   shift, so it backs up item 1 and does not replace item 3. A subtle metadata swap, like the published sibling-key case, may stay inside
    ±1.1. That is another reason item 1 is needed.
 3. **Observation shift — in, narrowly defined.** Declare an image-statistics band, measured on
    the declared conditions. It caught every lighting and noise episode for about 0.4% overhead.
@@ -173,8 +177,8 @@ follows its instruction.
    inits it did not choose.
 
 **Also for Alex, outside D10:**
-- The fixture's 54% baseline bounds any gate. A threshold above about 0.39 fails the fixture as
-  shipped, with no perturbation at all.
+- The fixture's 54% baseline bounds any gate. At n = 50, a threshold above about 0.39 fails the
+  fixture as shipped, with no perturbation at all.
 - Same-host determinism held twice here. A full-run episode reproduced its smoke-run action hash.
   A rerun on a different CPU count reproduced its recorded hash. Both were on one host, so this
   says nothing about the cross-host question in D9a.

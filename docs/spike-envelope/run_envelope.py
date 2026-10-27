@@ -142,6 +142,8 @@ def _scene_hook(sub_env: Any, after_init: Callable[[Any, np.random.Generator], N
 
 
 def scale_lights(scale: float) -> Callable[[Any, np.random.Generator], None]:
+    # Scales the live model in place. That is right only because LIBERO's hard reset rebuilds
+    # the model before every init state; the recorded brightness is constant across episodes.
     def apply(inner: Any, _rng: np.random.Generator) -> None:
         model = inner.env.sim.model
         model.light_diffuse[:] = np.clip(model.light_diffuse * scale, 0.0, 1.0)
