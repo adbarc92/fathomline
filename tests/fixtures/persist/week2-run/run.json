@@ -1,0 +1,33 @@
+{
+  "run_schema_version": 1,
+  "seed_set": {
+    "name": "smoke",
+    "description": "One episode at LeRobot's default seed, the seed every spike measurement used. The per-PR container smoke.",
+    "seeds": [
+      1000
+    ],
+    "digest": "40510175845988f13f6162ed8526f0b09f73384467fa855e1e79b44a56562a58"
+  },
+  "started_at": "2026-10-26T00:00:00Z",
+  "episode_durations": [
+    0.0001162998378276825
+  ],
+  "host": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "machine": "AMD64",
+    "cpu_model": "AMD64 Family 25 Model 33 Stepping 0, AuthenticAMD",
+    "cpu_flags": [],
+    "logical_cpus": 16,
+    "usable_cpus": null,
+    "python_version": "3.12.10",
+    "threading_env": {},
+    "torch": null
+  },
+  "argv": [
+    "sweep",
+    "--seed-set",
+    "smoke",
+    "--run-dir",
+    "runs/week2-run"
+  ]
+}

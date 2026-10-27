@@ -29,7 +29,7 @@ def test_version_is_reported(capsys: pytest.CaptureFixture[str]) -> None:
     assert __version__ in capsys.readouterr().out
 
 
-@pytest.mark.parametrize("command", ["sweep", "reproduce"])
+@pytest.mark.parametrize("command", ["reproduce"])
 def test_a_stub_exits_not_implemented_rather_than_reporting_a_result(
     command: str, capsys: pytest.CaptureFixture[str]
 ) -> None:

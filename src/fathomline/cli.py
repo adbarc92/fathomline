@@ -19,6 +19,7 @@ from pathlib import Path
 from fathomline import __version__
 from fathomline.core import Env, Policy, RunManifest, RunResult, run_episode, to_document
 from fathomline.gates import command as gate_command
+from fathomline.persist import command as sweep_command
 from fathomline.report import RESULT_FILENAME, ReportError, report_run_dir
 
 #: `eval` is declared but unbuilt. Distinct from 1 so a future real failure of
@@ -36,7 +37,7 @@ DEFAULT_SEED = 1000
 #: Every subcommand the harness will have. Each is a stub until its lane lands.
 COMMANDS = {
     "eval": "run the pinned fixture for N episodes and print the result as JSON",
-    "sweep": "run an evaluation over a seed set (not implemented)",
+    "sweep": "run the pinned fixture over a declared seed set and persist the run",
     "gate": "pass or fail a persisted run against a declared threshold and minimum n",
     "report": "render a Markdown report from a persisted run directory",
     "reproduce": "re-run a published result and compare (not implemented)",
@@ -65,6 +66,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"seed of the first episode; episode k uses seed + k (default {DEFAULT_SEED})",
     )
     gate_command.add_arguments(subparsers["gate"])
+    sweep_command.add_arguments(subparsers["sweep"])
     subparsers["report"].add_argument(
         "run_dir", type=Path, help=f"a run directory holding {RESULT_FILENAME}"
     )
@@ -128,6 +130,14 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "gate":
         return gate_command.run(args)
+
+    if args.command == "sweep":
+        return sweep_command.run(
+            args,
+            fixture_installed=_fixture_installed,
+            load_fixture=_load_fixture,
+            argv=list(sys.argv[1:] if argv is None else argv),
+        )
 
     if args.command == "report":
         return _report(args.run_dir)

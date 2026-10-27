@@ -70,6 +70,9 @@ RUN python -m fathomline.adapters.lerobot.warm
 ENV HF_HUB_OFFLINE=1
 
 COPY src ./src
+# The declared seed sets `sweep` runs. The working directory is /app, so its default
+# `--lock tests.lock` finds this one.
+COPY tests.lock ./
 
 ENTRYPOINT ["python", "-m", "fathomline"]
 CMD ["--help"]
