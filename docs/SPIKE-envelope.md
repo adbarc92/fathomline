@@ -161,8 +161,8 @@ follows its instruction.
 2. **Action out of bounds — in, arm only, at a declared margin.** It costs nothing and caught the
    gross metadata fault on every episode, by step 5 in the one traced. The gripper must be
    excluded, and the training range must not be the bound. It will **not** catch observation
-   shift, so it backs up item 1 and does not replace item 3. A subtle metadata swap, like the published sibling-key case, may stay inside
-   ±1.1. That is another reason item 1 is needed.
+   shift, so it backs up item 1 and does not replace item 3. A subtle metadata swap, like the
+   published sibling-key case, may stay inside ±1.1. That is another reason item 1 is needed.
 3. **Observation shift — in, narrowly defined.** Declare an image-statistics band, measured on
    the declared conditions. It caught every lighting and noise episode for about 0.4% overhead.
    It is a coarse detector: it misses a camera swap and anything that leaves the statistics
