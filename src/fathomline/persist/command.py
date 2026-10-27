@@ -9,7 +9,9 @@ stderr. Exit codes:
 
 * 0 — the sweep ran and its run directory is complete;
 * 1 — the sweep ran but could not be persisted (the run directory appeared
-  while it ran); the measurement is lost and nothing was overwritten;
+  while it ran, or the written directory did not read back, in which case the
+  `.<name>.partial` staging directory is left for diagnosis); nothing was
+  overwritten;
 * 2 — nothing was run: the seed set is not declared, the lock is invalid, or
   the run directory already exists (argparse uses 2 for usage errors too);
 * 3 — the fixture is not installed here, as for `eval`.
@@ -102,7 +104,7 @@ def run(
             started_at=f"{started:%Y-%m-%dT%H:%M:%SZ}",
             argv=argv,
         )
-    except RunDirError as exc:  # The directory appeared while the sweep ran.
+    except RunDirError as exc:  # It appeared while the sweep ran, or did not read back.
         print(f"fathomline sweep: the sweep ran but was not persisted: {exc}", file=sys.stderr)
         return EXIT_NOT_PERSISTED
     successes = sum(episode.success for episode in sweep.result.episodes)

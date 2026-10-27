@@ -38,7 +38,9 @@ depend on its own path: it can be copied or published as is.
 
 Result schema v1, unchanged by lane B: the manifest (fixture refs, seeds, max steps, Python,
 platform) and one entry per episode (`seed`, `steps`, `success`, `sum_reward`, `max_reward`,
-`action_hash`, `flags`). This is the only file `report` and `gate` read.
+`action_hash`, `flags`). This is the only file `report` and `gate` read. A non-finite metric is
+written as Python's `NaN` / `Infinity` / `-Infinity` tokens, which are not standard JSON: a strict
+parser reading `result.json` must accept them. (A candidate for the next result-schema bump.)
 
 ## `run.json`
 

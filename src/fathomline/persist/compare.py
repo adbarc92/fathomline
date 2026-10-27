@@ -57,9 +57,11 @@ def _same(left: object, right: object) -> bool:
         if math.isnan(left) and math.isnan(right):
             return True
         return struct.pack("<d", left) == struct.pack("<d", right)
-    if isinstance(left, tuple) and isinstance(right, tuple):
-        return len(left) == len(right) and all(map(_same, left, right))
     return left == right
+
+
+def _packed(action: Action) -> bytes:
+    return struct.pack(f"<{len(action)}d", *action)
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,7 +77,8 @@ class Divergence:
 def first_divergence(expected: Sequence[Action], actual: Sequence[Action]) -> Divergence | None:
     """The first step at which two trajectories differ, or None if they are identical."""
     for step, (left, right) in enumerate(zip(expected, actual, strict=False)):
-        if not _same(left, right):
+        # Bit for bit, NaN sign and payload included: this explains a hash mismatch.
+        if _packed(left) != _packed(right):
             if len(left) != len(right):
                 return Divergence(step=step, max_abs_diff=None)
             return Divergence(

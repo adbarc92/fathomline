@@ -605,3 +605,7 @@ def test_first_divergence_locates_the_step() -> None:
     assert first_divergence(a, [a[0], (0.5,)]) == Divergence(step=1, max_abs_diff=None)
     assert first_divergence(a, a[:2]) == Divergence(step=2, max_abs_diff=None)
     assert first_divergence([(math.nan,)], [(math.nan,)]) is None
+    # A NaN of another sign hashes differently, so it is a divergence here.
+    divergence = first_divergence([(math.nan,)], [(NEGATIVE_NAN,)])
+    assert divergence is not None
+    assert divergence.step == 0
