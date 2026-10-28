@@ -11,6 +11,11 @@ tuned to the episodes it then judges says nothing about them.
   clean runs leave it. Both are measured in `docs/SPIKE-envelope.md`. The margin
   was chosen after that spike, which is why D10 fixes it rather than leaving it
   to tuning.
+* **Unseen init.** Declared and enforced by construction, with no runtime
+  monitor. The harness picks every episode's initial state itself, as
+  `seed % n` over the task's `n` benchmark init states (`LeRobotEnv.reset`), so
+  its own runs cannot start outside them. A monitor becomes necessary once the
+  harness runs initial states it did not choose.
 """
 
 from __future__ import annotations
