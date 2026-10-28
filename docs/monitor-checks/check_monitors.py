@@ -97,7 +97,7 @@ def _rows(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.read_text().splitlines() if line]
 
 
-def run(condition: str, seeds: range, out: Path, spike: Path) -> None:
+def run(condition: str, seeds: range, out: Path, spike: Path, step_limit: int | None) -> None:
     sys.path.insert(0, str(spike))
     from run_envelope import CONDITIONS, install  # the spike's fault injection, unchanged
 
@@ -116,6 +116,9 @@ def run(condition: str, seeds: range, out: Path, spike: Path) -> None:
     from fathomline.monitors import LIBERO_ARM_DIMS, fixture_monitors
 
     env, policy, max_steps = load_fixture()
+    if step_limit is not None:
+        # Fault runs only: a flag is a first-steps fact, and a failing episode runs all 280.
+        max_steps = min(max_steps, step_limit)
     frames: list[Any] = []
     noise: list[Any] = [None]
     install(condition, env, policy, frames, noise)
@@ -141,6 +144,7 @@ def run(condition: str, seeds: range, out: Path, spike: Path) -> None:
             "seed": seed,
             "success": result.success,
             "steps": result.steps,
+            "max_steps": max_steps,
             "action_hash": result.action_hash,
             "flagged": bool(flags),
             "flags": len(flags),
@@ -239,6 +243,9 @@ def main() -> int:
     parser.add_argument("--condition", action="append", default=[])
     parser.add_argument("--first-seed", type=int, default=1000)
     parser.add_argument("--episodes", type=int, default=1)
+    parser.add_argument(
+        "--max-steps", type=int, help="cut each episode short (fault runs; never clean ones)"
+    )
     parser.add_argument("--out", type=Path, default=Path("/out"))
     parser.add_argument("--spike", type=Path, default=Path("/spike"))
     parser.add_argument("--summarize", type=Path, help="print the tables for a results directory")
@@ -252,7 +259,7 @@ def main() -> int:
     args.out.mkdir(parents=True, exist_ok=True)
     seeds = range(args.first_seed, args.first_seed + args.episodes)
     for condition in args.condition:  # a fresh fixture per condition, so no patch carries over
-        run(condition, seeds, args.out, args.spike)
+        run(condition, seeds, args.out, args.spike, args.max_steps)
     return 0
 
 
