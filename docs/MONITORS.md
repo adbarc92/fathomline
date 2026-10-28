@@ -51,8 +51,8 @@ What these numbers can and cannot show:
 
 Build the image from this branch: the source is copied in at build time. Then run each condition,
 with this check and the spike's fault injection mounted. These are Linux paths; on Windows, use
-absolute paths in `-v`. A seed already in a condition's file is refused, so write each run to a
-fresh directory.
+absolute paths in `-v`. Runs of one condition append to the same file, but a seed already in it is
+refused. `--summarize` reports seeds the spike also ran (replays) and new seeds as separate rows.
 
 ```bash
 docker build -t fathomline .

@@ -172,11 +172,13 @@ def _ranges(seeds: list[int]) -> str:
 
 
 def summarize(directory: Path, spike_results: Path | None) -> int:
+    """One table row per condition and kind of episode: a replay of a seed the spike also ran
+    (its outcome was already in the spike's data), or a new episode. They are never merged."""
     print(
-        "| Condition | Seeds (n) | Flagged | First flag step (min / median / max) "
+        "| Condition | Episodes | Seeds (n) | Flagged | First flag step (min / median / max) "
         "| Arm peak range |"
     )
-    print("|---|---|---|---|---|")
+    print("|---|---|---|---|---|---|")
     notes: list[str] = []
     for path in sorted(directory.glob("*.jsonl")):
         rows = _rows(path)
@@ -185,20 +187,26 @@ def summarize(directory: Path, spike_results: Path | None) -> int:
             repeated = sorted({seed for seed in seeds if seeds.count(seed) > 1})
             print(f"{path}: seeds {repeated} appear more than once", file=sys.stderr)
             return 1
-        steps = [row["first_flag_step"] for row in rows if row["flagged"]]
-        step_text = f"{min(steps)} / {statistics.median(steps):g} / {max(steps)}" if steps else "-"
-        peaks = [row["arm_peak"] for row in rows]
-        print(
-            f"| `{path.stem}` | {_ranges(seeds)} ({len(seeds)}) | {len(steps)}/{len(rows)} "
-            f"| {step_text} | {min(peaks):.2f} to {max(peaks):.2f} |"
-        )
-        cpus = sorted({row.get("cpu", "not recorded") for row in rows})
-        notes.append(f"`{path.stem}`: CPU {'; '.join(cpus)}.")
-        if spike_results is None:
-            continue
-        reference = _rows(spike_results / path.name)
+        reference = _rows(spike_results / path.name) if spike_results is not None else []
         known = {row["seed"]: row["action_hash"] for row in reference}
         paired = [row for row in rows if row["seed"] in known]
+        new = [row for row in rows if row["seed"] not in known]
+        for kind, group in (("replay of the spike's", paired), ("new", new)):
+            if not group:
+                continue
+            group_seeds = sorted(row["seed"] for row in group)
+            steps = [row["first_flag_step"] for row in group if row["flagged"]]
+            step_text = (
+                f"{min(steps)} / {statistics.median(steps):g} / {max(steps)}" if steps else "-"
+            )
+            peaks = [row["arm_peak"] for row in group]
+            print(
+                f"| `{path.stem}` | {kind} | {_ranges(group_seeds)} ({len(group)}) "
+                f"| {len(steps)}/{len(group)} | {step_text} "
+                f"| {min(peaks):.2f} to {max(peaks):.2f} |"
+            )
+        cpus = sorted({row.get("cpu", "not recorded") for row in rows})
+        notes.append(f"`{path.stem}`: CPU {'; '.join(cpus)}.")
         if paired:
             same = sum(row["action_hash"] == known[row["seed"]] for row in paired)
             notes.append(
