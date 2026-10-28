@@ -17,6 +17,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 
 import pytest
+from conftest import SuiteFactory
 
 from fathomline.core import RunManifest, RunResult, StepRecord, run_episode
 from fathomline.fakes import FakeEnv, FakePolicy
@@ -25,7 +26,6 @@ from fathomline.monitors import (
     LIBERO_LOADED_PIPELINE,
     MonitorSuite,
     Provenance,
-    fixture_monitors,
     is_flagged,
 )
 
@@ -65,12 +65,14 @@ def test_every_declared_digest_is_a_sha256() -> None:
         int(digest, 16)
 
 
-def test_the_fixture_monitors_include_the_provenance_monitor() -> None:
-    suite = fixture_monitors(loaded_pipeline=_probe(LIBERO_LOADED_PIPELINE))
+def test_the_fixture_monitors_include_the_provenance_monitor(fixture_suite: SuiteFactory) -> None:
+    suite = fixture_suite()
     assert "provenance" in suite.name
 
 
-def test_the_fixture_suite_flags_a_loaded_pipeline_that_differs_from_the_declaration() -> None:
+def test_the_fixture_suite_flags_a_loaded_pipeline_that_differs_from_the_declaration(
+    fixture_suite: SuiteFactory,
+) -> None:
     lost = {**LIBERO_LOADED_PIPELINE, "policy.unnormalizer": "0" * 64}
     record = StepRecord(
         index=0,
@@ -78,10 +80,8 @@ def test_the_fixture_suite_flags_a_loaded_pipeline_that_differs_from_the_declara
         action=(0.0,) * 7,
         reward=0.0,
     )
-    assert (
-        list(fixture_monitors(loaded_pipeline=_probe(LIBERO_LOADED_PIPELINE)).on_step(record)) == []
-    )
-    (flag,) = fixture_monitors(loaded_pipeline=_probe(lost)).on_step(record)
+    assert list(fixture_suite().on_step(record)) == []
+    (flag,) = fixture_suite(loaded_pipeline=_probe(lost)).on_step(record)
     assert flag.monitor == "provenance"
     assert "policy.unnormalizer" in flag.reason
 
