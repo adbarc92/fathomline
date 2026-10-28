@@ -10,6 +10,7 @@ added here as their monitors land._
 |---|---|---|---|
 | 1 | Provenance mismatch | `Provenance`: the loaded pipeline's fingerprint against the pinned one | built |
 | 2 | Action out of bounds | `ActionBound`: arm dimensions 0–5 within ±1.1; gripper excluded | built |
+| 3 | Observation shift | `FrameBand`: third-person frame brightness and noise inside a declared band | built |
 | 4 | Instruction outside the declared set | `InstructionSet`: exact match against the task's own instruction | built |
 | 5 | Unseen init | none: held by construction (see `envelope.py`) | declared |
 
@@ -57,6 +58,38 @@ below.
 the spike, lighting, noise, camera, instruction and init faults all left the actions looking
 normal. A subtle metadata swap could also stay inside ±1.1; D10's provenance condition is the
 check meant for that.
+
+## Observation shift
+
+**What it checks.** Every step, the adapter computes two statistics of the third-person frame the
+policy is handed, in 0–255 gray levels. Brightness is the mean of the channel-averaged image.
+Noise is the mean absolute difference between horizontal neighbours, which sensor noise raises
+and dim light lowers. Each statistic must lie in its declared band:
+
+| Statistic | Held-out range, every frame | Band |
+|---|---|---|
+| `image.brightness` | 101.32 to 105.29 | 91.19 to 115.82 |
+| `image.noise` | 5.80 to 6.44 | 5.22 to 7.09 |
+
+**How the band was set.** The rule was fixed before any episode it is scored on was run. It takes
+each statistic's range over every frame of the 50 held-out clean episodes (seeds 1050–1099, the
+same rows as the action-bound check below) and moves each end out by 10% of its value.
+`check_monitors.py --calibrate docs/monitor-checks/results/baseline.jsonl` reproduces it. It was
+not calibrated on the spike's 50 baseline episodes; 30 of them (seeds 1000–1029) are what it
+is scored on below. Those share their
+starts with the held-out ones, so frame 0 is the same image in both. The later frames differ.
+
+**What it misses.** It is coarse by design. **It does not catch a camera swap at the first
+frame**: the wrist view's statistics are close to the third-person view's, as the spike found.
+In the check below, the band did flag all 5 swapped episodes, but only at steps 9 to 27, as
+the wrist view's fine detail dropped below the noise band (on clean runs the wrist view's noise
+statistic falls as low as 1.7). That is
+incidental, not what the band is for: do not rely on it to catch a swap, and do not read a
+late band flag as proof of one. It also misses anything else that leaves brightness and fine-grained contrast alone,
+such as a moved object, a new texture of similar tone, or a shifted viewpoint. Only the
+third-person camera is checked. The wrist camera's statistics swing too far during clean
+manipulation for a band this simple: brightness 86 to 132 and noise 1.7 to 7.4 over the held-out
+clean episodes.
 
 ## Instruction outside the declared set
 
@@ -140,13 +173,38 @@ in the spike's full-length instruction runs the arm never passed 1.04, under the
 
 Provenance flags lost stats at step 0, before any action leaves its bound; the action bound
 follows a few steps later. The spike's pixel-level `camera_swap` is the monitor's stated miss:
-it changes no wiring the monitor digests. The observation-shift PR (#8) runs it under the
-full suite.
+it changes no wiring the monitor digests. Under the full suite below, provenance stayed silent on
+all 5 swapped episodes.
 
 The real observation carries the instruction as a one-element list under `task`, and the
 monitor reads it there. The paraphrase is flagged by design (D10). In the spike it gave 18/30
 against 15/30 clean on the same starts, so it does no measurable harm. It is flagged because it
 is outside what was evaluated.
+
+### Under all four monitors
+
+This run used the full suite on the observation-shift branch: provenance, action bound,
+observation shift and instruction. The clean episodes ran at full length. The lighting and noise
+faults were cut to 20 steps. The camera swap ran at full length, because its band flags come
+late.
+
+| Condition | Episodes | Flagged | By | First flag step (min / median / max) |
+|---|---|---|---|---|
+| clean (`baseline`), seeds 1000–1029 | 30, full length | **0/30** | – | – |
+| `light_dim` | 5, 20 steps | **5/5** | `observation-shift` | 0 / 0 / 0 |
+| `light_bright` | 5, 20 steps | **5/5** | `observation-shift` | 0 / 0 / 0 |
+| `noise` | 5, 20 steps | **5/5** | `observation-shift` | 0 / 0 / 0 |
+| `camera_swap` | 5, full length | **5/5** | `observation-shift` only | 9 / 21 / 27 |
+
+- **No false flags.** None of the four monitors flagged a clean episode. The clean frames
+  stayed at brightness 101.30 to 105.13 and noise 5.79 to 6.44, inside the band of
+  91.19–115.82 and 5.22–7.09. These seeds were not used to calibrate the band, but they start
+  where the calibration seeds did, so their first frames are the same images.
+- **The monitors leave the trajectory alone.** On the clean and camera-swap episodes, every
+  action hash equals the spike's (30/30 and 5/5).
+- **Flag reasons.** The lighting, noise and camera-swap rows were recorded before frame-band
+  reasons printed exact values. One reason reads `image.noise = 5.22 not in [5.22, 7.09]`; the
+  value was 5.2199. The flag decisions are the same.
 
 ## Reproduce the real-episode check
 
