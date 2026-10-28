@@ -86,6 +86,22 @@ def test_the_fixture_suite_flags_a_loaded_pipeline_that_differs_from_the_declara
     assert "policy.unnormalizer" in flag.reason
 
 
+def test_the_fixture_suite_reads_the_loaded_pipeline_on_every_step() -> None:
+    # Not a snapshot taken when the suite is built: a fault entering mid-run is flagged.
+    state = dict(LIBERO_LOADED_PIPELINE)
+    suite = fixture_monitors(loaded_pipeline=lambda: dict(state))
+    record = StepRecord(
+        index=0,
+        observation={"task": ["pick up the alphabet soup and place it in the basket"]},
+        action=(0.0,) * 7,
+        reward=0.0,
+    )
+    assert list(suite.on_step(record)) == []
+    state["policy.unnormalizer"] = "0" * 64
+    (flag,) = suite.on_step(record)
+    assert flag.monitor == "provenance"
+
+
 # --- One step -----------------------------------------------------------------------------------
 
 

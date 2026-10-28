@@ -8,8 +8,9 @@ directory and an output directory mounted:
       -v "$OUT:/out" --entrypoint python fathomline /check/check_monitors.py \
       --condition unnorm_identity --first-seed 1000 --episodes 30 --out /out
 
-Each episode runs through the core's `run_episode` with `fixture_monitors()`, the suite the
-envelope declares, so every monitor that lands in it is checked here without editing this file.
+Each episode runs through the core's `run_episode` with `fixture_monitors(...)`, the suite the
+envelope declares, given the adapter's hooks. A monitor that lands in the suite is checked here;
+a monitor that needs a new hook needs it passed in below.
 A fault is injected by the envelope spike's own `install` (`docs/spike-envelope/run_envelope.py`),
 unchanged, so a condition here is the same fault the spike measured. On seeds both ran, the
 action hashes should equal the spike's when run on the same CPU (the hash is known to differ
@@ -240,13 +241,15 @@ def summarize(directory: Path, spike_results: Path | None) -> int:
                 f"| {min(peaks):.2f} to {max(peaks):.2f} |"
             )
         by_monitor: dict[str, list[int]] = {}
-        for row in rows:
+        # Rows written before per-monitor steps were recorded cannot say which monitor flagged.
+        attributed = [row for row in rows if "first_flag_step_by_monitor" in row]
+        for row in attributed:
             for monitor, step in row.get("first_flag_step_by_monitor", {}).items():
                 by_monitor.setdefault(monitor, []).append(step)
         for monitor, firsts in sorted(by_monitor.items()):
             notes.append(
-                f"`{path.stem}`: `{monitor}` flagged {len(firsts)}/{len(rows)}, first at step "
-                f"{min(firsts)} / {statistics.median(firsts):g} / {max(firsts)} "
+                f"`{path.stem}`: `{monitor}` flagged {len(firsts)}/{len(attributed)}, "
+                f"first at step {min(firsts)} / {statistics.median(firsts):g} / {max(firsts)} "
                 "(min / median / max)."
             )
         cpus = sorted({row.get("cpu", "not recorded") for row in rows})

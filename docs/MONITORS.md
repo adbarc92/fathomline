@@ -20,22 +20,26 @@ monitor compares each digest with the one pinned in `envelope.py`. The component
 
 | Component | What is digested |
 |---|---|
-| `policy.unnormalizer` | the tensors the action unnormalizer applies, its features and its mode per feature type |
+| `policy.unnormalizer` | the action unnormalizer's configuration (eps, features, mode per feature type, keys it normalizes), the tensors it applies, and the stats they come from |
 | `policy.normalizer` | the same, for the input normalizer |
 | `policy.rename_map` | which env image key feeds which policy camera |
 | `env.cameras` | which simulator camera feeds which env image key |
 
 A component that differs, is missing, or is not declared is flagged. A missing processor step
 digests as an empty list, so it differs too. The pins are the digests of a clean load of the
-pinned fixture; they are stable across loads and resets.
+pinned fixture. The CI container job re-checks them on every change to the adapter or the pins
+(`docs/monitor-checks/check_loaded_pipeline.py`): a clean load matches after load and after a
+reset, an action and a step; lost action stats change `policy.unnormalizer` alone; and
+exchanging the cameras in the rename map changes `policy.rename_map` alone.
 
 **Why in memory.** `pins.verify` already checks every file on disk. In the spike, the lost-stats
 fault replaced the unnormalizer's statistics after load, and every file still matched its pin.
 
 **What it misses.** It sees configuration, not data. The spike's `camera_swap` exchanged the two
 images in the pixel stream, after the wiring this monitor digests, so it is not flagged here; a
-swap in the rename map is (`rename_swap` below). A fault in a component not listed above, such
-as the tokenizer or the model weights in memory, is not seen either.
+swap in the rename map is (`rename_swap` below). A fault in a component not listed above is not
+seen either: for example the tokenizer, the model weights in memory, the order of the processor
+steps, the device step's dtype, or the env-side processor that flips the images.
 
 ## Action out of bounds
 

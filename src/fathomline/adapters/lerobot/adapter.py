@@ -15,6 +15,8 @@ coverage gate (D11) and exercised by the CI `container` job instead.
 
 from __future__ import annotations
 
+import dataclasses
+import enum
 import hashlib
 import importlib.metadata
 from collections.abc import Mapping
@@ -150,8 +152,8 @@ class LeRobotPolicy:
     def loaded_pipeline(self) -> dict[str, str]:
         """Digests of what the loaded processors use, read from memory, not from disk.
 
-        The (un)normalizers are digested over the tensors they apply (`_tensor_stats`),
-        their features and their mode per feature type; the rename map over its pairs.
+        The (un)normalizers are digested over their configuration, the tensors they apply
+        and the stats those come from (`_stats_state`); the rename map over its pairs.
         A step that is missing digests as an empty list, so it differs from the pin too.
         """
         return {
@@ -175,7 +177,10 @@ def _steps(processor: Any, kind: str) -> list[Any]:
 
 
 def _stats_state(step: Any) -> dict[str, Any]:
-    return {"features": step.features, "norm_map": step.norm_map, "stats": step._tensor_stats}
+    """Everything an (un)normalizer reads when called: its configuration (eps, features, mode
+    per feature type, which observation keys it normalizes), the tensors it applies, and the
+    stats those tensors are rebuilt from when the step is moved."""
+    return {"config": step.get_config(), "tensors": step._tensor_stats, "stats": step.stats}
 
 
 def _digest(value: Any) -> str:
@@ -186,6 +191,10 @@ def _digest(value: Any) -> str:
 
 
 def _feed(digest: Any, value: Any) -> None:
+    """Feed one value. A type with no canonical encoding here is refused, not repr'd: a repr can
+    elide (large arrays) or embed a memory address (plain objects), and either would make the
+    digest lossy or different on every load."""
+
     def text(item: str) -> None:
         data = item.encode()
         digest.update(f"{len(data)}:".encode() + data)
@@ -201,12 +210,24 @@ def _feed(digest: Any, value: Any) -> None:
         for item in value:
             _feed(digest, item)
         digest.update(b"]")
+    elif isinstance(value, set | frozenset):
+        _feed(digest, sorted(value, key=str))
     elif isinstance(value, torch.Tensor):
         tensor = value.detach().to("cpu").contiguous()
         text(f"tensor {tensor.dtype} {tuple(tensor.shape)}")
         digest.update(tensor.numpy().tobytes())
-    else:
+    elif type(value).__module__ == "numpy":
+        # An array or scalar in the stats as loaded: encoded as the tensor it converts to.
+        _feed(digest, torch.as_tensor(value))
+    elif dataclasses.is_dataclass(value) and not isinstance(value, type):
+        text(type(value).__name__)
+        _feed(
+            digest, {field.name: getattr(value, field.name) for field in dataclasses.fields(value)}
+        )
+    elif value is None or isinstance(value, str | int | float | bool | enum.Enum):
         text(repr(value))
+    else:
+        raise TypeError(f"no canonical digest for a {type(value).__name__}")
 
 
 def _installed(distribution: str) -> str:

@@ -43,9 +43,9 @@ from fathomline.monitors.provenance import Provenance
 #: methods take it from a clean load of the pinned fixture. Changing one is a re-pin.
 LIBERO_LOADED_PIPELINE: Mapping[str, str] = {
     "env.cameras": "ff0992ecd29b354d9899254590bbd4bb88644ea40963245d1e58003c30a0b795",
-    "policy.normalizer": "964135d9515808932a52118ef4145e2f63b1e60517da450665549687f627926d",
+    "policy.normalizer": "d69c000ead4972ec792c3ee30be6a734c2c696130633bb282311a8a82054e4e4",
     "policy.rename_map": "eab3915127c2fe1c37779c21e9b1a1e4d5d710f907c90fee38f98bfe394f77ff",
-    "policy.unnormalizer": "7ecfc571fc54861a7fd0317ad8cdc06461728b215a1659c7ae060bd738281283",
+    "policy.unnormalizer": "7b99b313f36973e5f346b18c41ffd7c1eb885e315274f655b561f508e2a69b08",
 }
 
 #: LIBERO's arm dimensions in the action vector. Index 6, the gripper, is excluded.
