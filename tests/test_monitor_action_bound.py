@@ -32,6 +32,7 @@ from fathomline.gates import GateConfig, evaluate
 from fathomline.monitors import (
     ARM_ACTION_LIMIT,
     LIBERO_ARM_DIMS,
+    LIBERO_INSTRUCTIONS,
     ActionBound,
     MonitorSuite,
     fixture_monitors,
@@ -44,7 +45,9 @@ GRIPPER = 6
 
 
 def _record(action: Sequence[float], index: int = 0) -> StepRecord:
-    return StepRecord(index=index, observation={}, action=tuple(action), reward=0.0)
+    # On the declared instruction, so every monitor in the fixture's suite can read the step.
+    observation = {"task": sorted(LIBERO_INSTRUCTIONS)}
+    return StepRecord(index=index, observation=observation, action=tuple(action), reward=0.0)
 
 
 def _arm(value: float, *, dim: int = 0, gripper: float = 1.0) -> Action:

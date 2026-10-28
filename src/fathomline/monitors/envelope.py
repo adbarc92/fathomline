@@ -12,6 +12,9 @@ tuned to the episodes it then judges says nothing about them.
   clean runs leave it. Both are measured in `docs/SPIKE-envelope.md`. The margin
   was chosen after that spike, which is why D10 fixes it rather than leaving it
   to tuning.
+* **Instruction outside the declared set.** The instruction must be, exactly,
+  the task's own. A paraphrase is flagged by design: it is outside what was
+  tested, whether or not it is harmful.
 * **Unseen init.** Declared and enforced by construction, with no runtime
   monitor. The harness picks every episode's initial state itself, as
   `seed % n` over the task's `n` benchmark init states (`LeRobotEnv.reset`), so
@@ -25,6 +28,7 @@ from __future__ import annotations
 
 from fathomline.monitors.action_bound import ActionBound
 from fathomline.monitors.framework import MonitorSuite
+from fathomline.monitors.instruction import InstructionSet
 
 #: LIBERO's arm dimensions in the action vector. Index 6, the gripper, is excluded.
 LIBERO_ARM_DIMS: tuple[int, ...] = (0, 1, 2, 3, 4, 5)
@@ -32,7 +36,16 @@ LIBERO_ARM_DIMS: tuple[int, ...] = (0, 1, 2, 3, 4, 5)
 #: D10 condition 2: the bound on every arm dimension. Changing it is a ruling.
 ARM_ACTION_LIMIT = 1.1
 
+#: D10 condition 4: the instructions the fixture is evaluated on. `libero_object` task 0's own,
+#: as the pinned LIBERO assets state it.
+LIBERO_INSTRUCTIONS = frozenset({"pick up the alphabet soup and place it in the basket"})
+
 
 def fixture_monitors() -> MonitorSuite:
     """The monitors for a run of the D1 fixture, one per runtime condition in D10 built so far."""
-    return MonitorSuite([ActionBound(limit=ARM_ACTION_LIMIT, dims=LIBERO_ARM_DIMS)])
+    return MonitorSuite(
+        [
+            ActionBound(limit=ARM_ACTION_LIMIT, dims=LIBERO_ARM_DIMS),
+            InstructionSet(declared=LIBERO_INSTRUCTIONS),
+        ]
+    )
