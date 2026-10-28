@@ -55,7 +55,7 @@ def _arm(value: float, *, dim: int = 0, gripper: float = 1.0) -> Action:
 
 
 def _monitor() -> ActionBound:
-    return ActionBound(limit=1.1, dims=LIBERO_ARM_DIMS)
+    return ActionBound(limit=ARM_ACTION_LIMIT, dims=LIBERO_ARM_DIMS)
 
 
 # --- The ruled declaration ----------------------------------------------------------------------
@@ -206,7 +206,9 @@ def _run(policy: _ArmPolicy) -> RunResult:
     env = FakeEnv(success_rate=1.0)
     manifest = RunManifest.capture(env=env, policy=policy, seeds=SEEDS, max_steps=MAX_STEPS)
     episodes = tuple(
-        run_episode(env, policy, seed=seed, max_steps=MAX_STEPS, monitors=[fixture_monitors()])
+        run_episode(
+            env, policy, seed=seed, max_steps=MAX_STEPS, monitors=[MonitorSuite([_monitor()])]
+        )
         for seed in SEEDS
     )
     return RunResult(manifest=manifest, episodes=episodes)
