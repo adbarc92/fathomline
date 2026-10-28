@@ -1,6 +1,6 @@
 ---
 stage: Build
-readiness: "Lanes 0, A, C, D, F merged; Lane B in review (PR #1); public as of 2026-10-25; no result published yet"
+readiness: "Lanes 0, A, C, D, F merged; lane E spike done, D10 awaiting a ruling; Lane B in review (PR #1); public as of 2026-10-25; no result published yet"
 updated: "2026-10-27"
 name: "Fathomline"
 base_branch: "main"
@@ -14,20 +14,26 @@ _Canonical, living status. The **State summary** is rewritten in place each sess
 
 ## State summary
 
-**As of 2026-10-27, lanes 0, A, C, D and F are merged. Lane B (sweep, seed sets, persisted runs) is
-in review as PR #1 and has been approved by its review agent. Its only red check is the `container`
-job, which fails at the GHCR push (`denied: permission_denied: write_package`), an owner-side
-package permission. E is in progress; G and H are not started. Open rulings: D9a (cross-host
-determinism) and D10 (declared envelope).** The plan and the rulings are in
-[`ROADMAP.md`](ROADMAP.md).
+**As of 2026-10-27, lanes 0, A, C, D and F are merged. The lane E spike is done: the envelope
+evidence is in [`SPIKE-envelope.md`](SPIKE-envelope.md), with a recommended D10 set for Alex to
+rule. Lane B (sweep, seed sets, persisted runs) is in review as PR #1 and has been approved by its
+review agent. Its only red check is the `container` job, which fails at the GHCR push
+(`denied: permission_denied: write_package`), an owner-side package permission. G and H are not
+started. Open rulings: D9a (cross-host determinism) and D10 (declared envelope).** The plan and
+the rulings are in [`ROADMAP.md`](ROADMAP.md).
 
 - **What exists on `main`.**
   - Lane 0: the `Env` / `Policy` / `Monitor` protocols, the owned step loop with an
     action-trajectory hash, `RunManifest` provenance and result schema v1.
   - Lane A: the LeRobot adapter and the container image, in which `eval` runs SmolVLA on LIBERO
     `libero_object` task 0 offline.
-  - Lane C: the Clopper-Pearson gate. Lane D: the JSON → Markdown report. Lane F: the monitor
-    framework.
+  - Lane C: the Clopper-Pearson gate, with a declared threshold and minimum *n*. Lane D: the
+    JSON → Markdown report. Lane F: the monitor framework, under which a flagged run is never
+    passed.
+  - Lane E: the envelope evidence, 290 episodes over 9 conditions.
+- **What the envelope spike found.** The fixture succeeds on 27/50 clean episodes ([0.39, 0.68]).
+  Dim light, camera noise, 5 cm object shifts, a camera swap, lost action stats and a foreign
+  instruction each cut that to 0–10%. Only the lost action stats show up in the actions.
 - **What PR #1 adds (lane B).**
   - `fathomline sweep --seed-set NAME` runs a seed set declared in [`tests.lock`](../tests.lock),
     whose sets are checked against their digests.
@@ -35,8 +41,10 @@ determinism) and D10 (declared envelope).** The plan and the rulings are in
     `result.json` (schema v1), `run.json` (run schema v1: the seed set, host facts, timings) and
     `trajectories/`. The format is documented for lane H in [`run-directory.md`](run-directory.md).
   - `tests/test_determinism.py` asserts run-to-run equality and fails when the seed is removed.
-- **What does not exist yet.** The envelope evidence (E), the monitor conditions (G), and
-  `reproduce` with a published result (H). `reproduce` exits 2.
+- **What does not exist yet.** The monitor conditions (G), and `reproduce` with a published
+  result (H). `reproduce` exits 2.
+- **History.** Lanes 0, A, C, D and F were built and reviewed as PRs #2–#8 in an earlier private
+  repository, now archived. This repository starts from that code as a single commit.
 - **Determinism evidence (for D9a; no ruling made).**
   - In two fresh containers on one host (Ryzen 7 5800X, AVX2, 2 CPUs), sweeps of the smoke set gave
     the same action hash, `aa18c8f3…`, and the same metrics.
@@ -59,14 +67,17 @@ determinism) and D10 (declared envelope).** The plan and the rulings are in
 **Next steps** — each points into [`ROADMAP.md`](ROADMAP.md)
 1. Owner: fix the GHCR package permission, so the `container` job runs the in-image sweep check.
    Then merge PR #1.
-2. Rule D9a, with the evidence above and in PR #1.
-3. Lane E, then rule D10 from its data; lane G follows.
-4. Lane H: build `reproduce` on the run directory, and publish the first result.
+2. Rule D10 from [`SPIKE-envelope.md`](SPIKE-envelope.md) (recommended set at its end); lane G
+   follows, one monitor per ruled condition.
+3. Rule D9a, with the evidence above and in PR #1.
+4. Lane H: build `reproduce` on the run directory, and publish the first result. Any gate
+   threshold must reckon with the fixture's 54% clean baseline.
 
 **Known limitations**
 - No determinism claim across machines until D9a is resolved.
 - Run-to-run equality on the real fixture is shown on one local host. CI cannot run the in-image
   check until the GHCR push works.
+
 ---
 
 ## Session log
@@ -83,6 +94,15 @@ determinism) and D10 (declared envelope).** The plan and the rulings are in
 - Measured on the real fixture, locally: same-host equality holds, and a third host hash was
   recorded (see the State summary).
 - State delta: Lane B is in review; D9a has new evidence.
+
+### 2026-10-27 — Lane E: envelope evidence spike
+
+- Ran the D1 fixture under 8 perturbations (lighting, sensor noise, camera swap, lost action
+  stats, paraphrased and foreign instructions, shifted objects) and a baseline: 290 episodes,
+  paired on the benchmark init states. Primer, scripts and raw JSONL:
+  [`SPIKE-envelope.md`](SPIKE-envelope.md), [`spike-envelope/`](spike-envelope/).
+- State delta: D10 has its evidence and a recommended set; the ruling is Alex's. A cross-check
+  in LeRobot's own loop got 6/10 against the harness's 7/10 on the same 10 starts.
 
 ### 2026-10-25 — Public release
 
