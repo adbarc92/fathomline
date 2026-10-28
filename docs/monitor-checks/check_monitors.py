@@ -131,7 +131,7 @@ def run(condition: str, seeds: range, out: Path, spike: Path, step_limit: int | 
     if done:
         raise SystemExit(f"{sink} already has seeds {sorted(done)}; refusing to append them twice")
 
-    from fathomline.adapters.lerobot.adapter import load_fixture
+    from fathomline.adapters.lerobot.adapter import frame_statistics, load_fixture
     from fathomline.core import run_episode
     from fathomline.monitors import LIBERO_ARM_DIMS, fixture_monitors
 
@@ -162,7 +162,13 @@ def run(condition: str, seeds: range, out: Path, spike: Path, step_limit: int | 
             policy,
             seed=seed,
             max_steps=max_steps,
-            monitors=(fixture_monitors(loaded_pipeline=loaded_pipeline), peak, frame_stats),
+            monitors=(
+                fixture_monitors(
+                    loaded_pipeline=loaded_pipeline, frame_statistics=frame_statistics
+                ),
+                peak,
+                frame_stats,
+            ),
         )
         flags = result.flags
         row = {
@@ -288,6 +294,26 @@ def summarize(directory: Path, spike_results: Path | None) -> int:
     return 0
 
 
+#: The observation-shift band rule, fixed before the episodes it is scored on were run: the
+#: held-out range of each statistic over every frame, each end moved out by 10% of its value.
+BAND_MARGIN = 0.10
+
+
+def calibrate(path: Path) -> int:
+    """Print the third-person frame bands from clean held-out rows (`baseline.jsonl`)."""
+    rows = [row for row in _rows(path) if "frames" in row]
+    if not rows:
+        print(f"{path}: no rows with frame statistics", file=sys.stderr)
+        return 1
+    print(f"{len(rows)} episodes, seeds {_ranges(sorted(row['seed'] for row in rows))}")
+    for stat, key in (("image.brightness", "brightness_range"), ("image.noise", "noise_range")):
+        low = min(row["frames"]["image"][key][0] for row in rows)
+        high = max(row["frames"]["image"][key][1] for row in rows)
+        band = (round(low * (1 - BAND_MARGIN), 2), round(high * (1 + BAND_MARGIN), 2))
+        print(f"{stat}: held-out range [{low}, {high}] -> band {band}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--condition", action="append", default=[])
@@ -300,8 +326,11 @@ def main() -> int:
     parser.add_argument("--spike", type=Path, default=Path("/spike"))
     parser.add_argument("--summarize", type=Path, help="print the tables for a results directory")
     parser.add_argument("--spike-results", type=Path, help="compare with the spike's JSONL here")
+    parser.add_argument("--calibrate", type=Path, help="print frame bands from a baseline.jsonl")
     args = parser.parse_args()
 
+    if args.calibrate:
+        return calibrate(args.calibrate)
     if args.summarize:
         return summarize(args.summarize, args.spike_results)
     if not args.condition:

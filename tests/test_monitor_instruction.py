@@ -59,23 +59,16 @@ def _fixture_step(task: object) -> StepRecord:
     return StepRecord(index=0, observation={"task": task}, action=(0.0,) * 7, reward=0.0)
 
 
-def test_the_fixture_suite_passes_the_task_own_instruction() -> None:
-    assert (
-        list(
-            fixture_monitors(loaded_pipeline=lambda: LIBERO_LOADED_PIPELINE).on_step(
-                _fixture_step([TASK_0])
-            )
-        )
-        == []
-    )
+def test_the_fixture_suite_passes_the_task_own_instruction(fixture_suite: SuiteFactory) -> None:
+    assert list(fixture_suite().on_step(_fixture_step([TASK_0]))) == []
 
 
 @pytest.mark.parametrize("instruction", [TASK_1, PARAPHRASE])
-def test_the_fixture_suite_flags_any_other_instruction(instruction: str) -> None:
+def test_the_fixture_suite_flags_any_other_instruction(
+    instruction: str, fixture_suite: SuiteFactory
+) -> None:
     # The suite the fixture runs with, not only the constant: a widened set would pass these.
-    (flag,) = fixture_monitors(loaded_pipeline=lambda: LIBERO_LOADED_PIPELINE).on_step(
-        _fixture_step([instruction])
-    )
+    (flag,) = fixture_suite().on_step(_fixture_step([instruction]))
     assert flag.monitor == "instruction-set"
 
 
