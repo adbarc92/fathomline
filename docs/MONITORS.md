@@ -31,7 +31,32 @@ check meant for that.
 ## Real-episode check
 
 The D1 fixture in the container, through the harness's own loop, with `fixture_monitors()`
-attached. RESULTS_PENDING
+attached. For each condition, the table gives how many episodes were flagged and the step of the
+first flag. The arm peak is each episode's largest arm magnitude.
+
+| Condition | Episodes | Seeds (n) | Flagged | First flag step (min / median / max) | Arm peak range |
+|---|---|---|---|---|---|
+| clean (`baseline`) | new | 1050–1099 (50) | **0/50** | – | 0.91 to 1.01 |
+| lost action stats (`unnorm_identity`) | replay of the spike's | 1000–1029 (30) | **30/30** | 0 / 4 / 6 | 2.27 to 2.68 |
+| lost action stats (`unnorm_identity`) | new | 1050–1079 (30) | **30/30** | 2 / 4 / 7 | 2.20 to 2.68 |
+
+- **Seed 1000 (lost stats).** The first flag fires at **step 3**: `action outside +/-1.1: dim 1 =
+  -1.318`. The arm then stays out of bounds for most of the episode.
+- **Clean margin.** The largest clean arm value was 1.01. Five of the 50 clean episodes passed ±1,
+  against three of 50 in the spike, and none reached 1.1. The clean episodes succeeded 29 times in
+  50.
+- **Same episodes as the spike.** On the 30 replayed seeds the action hashes equal the spike's
+  (30/30). On all 80 episodes, frame-0 brightness and noise match the spike's on the same start
+  to within 0.005.
+- **Episode length.** The new lost-stats episodes were cut to 60 steps (`--max-steps 60`). Every
+  first flag came by step 7. The replayed ones ran the full 280. Clean episodes always run to the
+  task's own limit.
+- **Which code produced which rows.** The clean rows and the replayed lost-stats rows came from
+  runs started before the check recorded the CPU model. Their flag reasons also round the value
+  (`dim 1 = -1.318`); the merged code prints the exact value. That changes the message only: the
+  flag decisions are the same comparison. The new lost-stats rows come from the current code. Every
+  row ran on the same image (`lerobot==0.6.1`, the pinned snapshots) with the branch's
+  `src/` mounted over the image's copy.
 
 What these numbers can and cannot show:
 
