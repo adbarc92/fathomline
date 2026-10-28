@@ -22,8 +22,10 @@ tuned to the episodes it then judges says nothing about them.
   brightness and noise statistics inside a declared band. The band is the range
   those statistics took over every frame of held-out clean episodes, with each
   end moved out by 10% of its value; the rule was fixed before the episodes it
-  is scored on were run. It is coarse: it does not catch a camera swap, because
-  both views have similar statistics, nor anything else that leaves them alone.
+  is scored on were run. It is coarse: it does not catch a camera swap at the
+  first frame, because both views have similar statistics, nor anything else
+  that leaves them alone. A swapped episode may still be flagged later, when the
+  wrist view's detail drops near an object; that is incidental, not designed.
 * **Instruction outside the declared set.** The instruction must be, exactly,
   the task's own. A paraphrase is flagged by design: it is outside what was
   tested, whether or not it is harmful.
