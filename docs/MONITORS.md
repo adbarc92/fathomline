@@ -135,6 +135,13 @@ in the spike's full-length instruction runs the arm never passed 1.04, under the
 |---|---|---|---|---|
 | `instruction_other` (task 1's instruction) | **5/5** | `instruction-set` | 0 on every episode | none flagged |
 | `instruction_paraphrase` | **5/5** | `instruction-set` | 0 on every episode | none flagged |
+| `rename_swap` (cameras exchanged in the loaded rename map) | **5/5** | `provenance` (`policy.rename_map`) | 0 on every episode | none flagged |
+| `unnorm_identity` (lost action stats; 3 episodes, cut to 60 steps) | **3/3** | `provenance` (`policy.unnormalizer`) and `action-bound` | 0 (provenance); 3, 4, 6 (action bound) | – |
+
+Provenance flags lost stats at step 0, before any action leaves its bound; the action bound
+follows a few steps later. The spike's pixel-level `camera_swap` is the monitor's stated miss:
+it changes no wiring the monitor digests, and the observation-shift runs below show provenance
+silent on it.
 
 The real observation carries the instruction as a one-element list under `task`, and the
 monitor reads it there. The paraphrase is flagged by design (D10). In the spike it gave 18/30
