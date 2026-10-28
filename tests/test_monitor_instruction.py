@@ -20,6 +20,7 @@ from fathomline.fakes import FakeEnv, FakePolicy
 from fathomline.gates import GateConfig, evaluate
 from fathomline.monitors import (
     LIBERO_INSTRUCTIONS,
+    LIBERO_LOADED_PIPELINE,
     InstructionSet,
     fixture_monitors,
     is_flagged,
@@ -48,7 +49,7 @@ def test_the_declared_set_is_the_fixture_task_instruction_alone() -> None:
 
 
 def test_the_fixture_monitors_include_the_instruction_monitor() -> None:
-    suite = fixture_monitors()
+    suite = fixture_monitors(loaded_pipeline=lambda: LIBERO_LOADED_PIPELINE)
     assert "instruction-set" in suite.name
 
 
