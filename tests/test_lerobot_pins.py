@@ -37,11 +37,7 @@ def test_every_pin_names_a_full_revision_sha_and_a_content_digest(pin: pins.HubP
 
 
 def test_the_fixture_replans_every_ten_actions_not_once_per_chunk() -> None:
-    """The checkpoint's config plays a whole 50-action chunk before it looks again.
-
-    That setting is SmolVLA's worst on LIBERO: the paper's Table 13 gives 70% on Object
-    against 94% at 10, and huggingface/lerobot#4614 measures the same gap on this checkpoint.
-    """
+    """Not the checkpoint's shipped 50: see `pins.N_ACTION_STEPS`."""
     assert pins.N_ACTION_STEPS == 10
 
 

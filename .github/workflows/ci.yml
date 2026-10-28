@@ -186,6 +186,9 @@ jobs:
           import json
           document = json.load(open("result.json"))
           assert document["schema_version"] == 1, document["schema_version"]
+          # The replan horizon is part of what was run, so the manifest must carry it.
+          policy = document["manifest"]["policy"]["revision"]
+          assert "n_action_steps=10" in policy, policy
           (episode,) = document["episodes"]
           assert episode["seed"] == 1000 and episode["steps"] >= 1, episode
           print("episode:", {k: episode[k] for k in ("seed", "steps", "success", "max_reward")})
