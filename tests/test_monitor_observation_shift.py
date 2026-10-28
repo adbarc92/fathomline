@@ -13,8 +13,10 @@ adapter, and the shift is injected through the fake's observation.
 
 from __future__ import annotations
 
+import json
 import math
 from collections.abc import Callable, Mapping
+from pathlib import Path
 
 import pytest
 from conftest import SuiteFactory
@@ -33,6 +35,8 @@ from fathomline.monitors import (
 BANDS = {"image.brightness": (92.0, 115.0), "image.noise": (5.3, 7.0)}
 CLEAN = {"image.brightness": 102.2, "image.noise": 5.87}
 SEEDS = tuple(range(1000, 1010))
+#: The held-out clean episodes the bands were calibrated on (the action-bound check's clean run).
+HELD_OUT = Path(__file__).parent.parent / "docs/monitor-checks/results/baseline.jsonl"
 MAX_STEPS = 10
 
 
@@ -61,6 +65,28 @@ def test_the_declared_bands_hold_the_clean_spike_frame_and_exclude_its_shifts() 
     assert high_n < 15.4
 
 
+def test_the_declared_bands_are_the_rule_applied_to_the_held_out_episodes() -> None:
+    # D10: calibrated on held-out clean episodes (seeds 1050-1099), by a rule fixed beforehand:
+    # each statistic's range over every frame, each end moved out by 10% of its value.
+    rows = [
+        json.loads(line)
+        for line in HELD_OUT.read_text().splitlines()
+        if line and "frames" in json.loads(line)
+    ]
+    assert sorted(row["seed"] for row in rows) == list(range(1050, 1100))
+    for stat, key in (("image.brightness", "brightness_range"), ("image.noise", "noise_range")):
+        low = min(row["frames"]["image"][key][0] for row in rows)
+        high = max(row["frames"]["image"][key][1] for row in rows)
+        assert LIBERO_FRAME_BANDS[stat] == (round(low * 0.9, 2), round(high * 1.1, 2)), stat
+
+
+def test_the_declared_bands_are_pinned() -> None:
+    assert dict(LIBERO_FRAME_BANDS) == {
+        "image.brightness": (91.19, 115.82),
+        "image.noise": (5.22, 7.09),
+    }
+
+
 def test_the_fixture_monitors_include_the_observation_shift_monitor(
     fixture_suite: SuiteFactory,
 ) -> None:
@@ -68,12 +94,24 @@ def test_the_fixture_monitors_include_the_observation_shift_monitor(
     assert "observation-shift" in suite.name
 
 
-def test_the_fixture_suite_flags_a_dim_frame(fixture_suite: SuiteFactory) -> None:
+@pytest.mark.parametrize(
+    ("stat", "value"),
+    [
+        ("image.brightness", 37.0),
+        ("image.brightness", 140.0),
+        ("image.noise", 15.4),
+        ("image.noise", 2.2),
+    ],
+)
+def test_the_fixture_suite_holds_both_statistics_to_their_bands(
+    fixture_suite: SuiteFactory, stat: str, value: float
+) -> None:
+    # The suite the fixture runs with, not only the constants: dropping a statistic fails here.
     record = StepRecord(
         index=0, observation={"task": sorted(LIBERO_INSTRUCTIONS)}, action=(0.0,) * 7, reward=0.0
     )
-    dim = {**CLEAN, "image.brightness": 37.0}
-    suite = fixture_suite(frame_statistics=lambda _o: dim)
+    shifted = {**CLEAN, stat: value}
+    suite = fixture_suite(frame_statistics=lambda _o: shifted)
     (flag,) = suite.on_step(record)
     assert flag.monitor == "observation-shift"
 

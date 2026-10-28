@@ -75,13 +75,15 @@ and dim light lowers. Each statistic must lie in its declared band:
 each statistic's range over every frame of the 50 held-out clean episodes (seeds 1050–1099, the
 same rows as the action-bound check below) and moves each end out by 10% of its value.
 `check_monitors.py --calibrate docs/monitor-checks/results/baseline.jsonl` reproduces it. It was
-not calibrated on the spike's 50 baseline episodes, which it is scored on below. Those share their
+not calibrated on the spike's 50 baseline episodes; 30 of them (seeds 1000–1029) are what it
+is scored on below. Those share their
 starts with the held-out ones, so frame 0 is the same image in both. The later frames differ.
 
 **What it misses.** It is coarse by design. **It does not catch a camera swap at the first
 frame**: the wrist view's statistics are close to the third-person view's, as the spike found.
-In the check below, the band did flag all 5 swapped episodes, but only at steps 9 to 27, once
-the wrist camera neared an object and its fine detail dropped below the noise band. That is
+In the check below, the band did flag all 5 swapped episodes, but only at steps 9 to 27, as
+the wrist view's fine detail dropped below the noise band (on clean runs the wrist view's noise
+statistic falls as low as 1.7). That is
 incidental, not what the band is for: do not rely on it to catch a swap, and do not read a
 late band flag as proof of one. It also misses anything else that leaves brightness and fine-grained contrast alone,
 such as a moved object, a new texture of similar tone, or a shifted viewpoint. Only the

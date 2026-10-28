@@ -2,9 +2,10 @@
 
 A coarse detector by design. It catches what moves cheap image statistics, such
 as lighting and sensor noise, for a fraction of a percent of a step. It misses
-anything that leaves them alone: in the envelope spike, exchanging the two
-cameras moved neither statistic out of the clean range, so a camera swap is not
-caught here.
+anything that leaves them alone. It does not catch a camera swap at the first
+frame, where both views look alike; a swapped episode may be flagged later, as
+the wrist view's fine detail drops, but that is incidental and not to be
+relied on.
 
 Which statistics, computed how, is the adapter's to say: it owns the image
 tensors. This module only holds each value to its band.

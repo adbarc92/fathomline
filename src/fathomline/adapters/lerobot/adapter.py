@@ -34,7 +34,13 @@ from lerobot.utils.random_utils import set_seed
 from fathomline.adapters.lerobot import pins
 from fathomline.core.types import Action, ArtifactRef, Observation, Transition
 
-__all__ = ["LeRobotEnv", "LeRobotPolicy", "load_fixture"]
+__all__ = [
+    "THIRD_PERSON_CAMERA",
+    "LeRobotEnv",
+    "LeRobotPolicy",
+    "frame_statistics",
+    "load_fixture",
+]
 
 
 class LeRobotEnv:
