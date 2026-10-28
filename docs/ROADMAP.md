@@ -70,6 +70,25 @@ him for more than a ruling.
 | Then | G; H begins; publish the first result | Merges |
 | To 2026-11-09 | Integration and hardening; G0.1-early, full G0.1 if the monitors are green | Merges |
 
+## Follow-ups
+
+Known gaps and small fixes that are not yet scheduled.
+
+- **CLI runs are unmonitored.** `fathomline eval` does not attach `fixture_monitors()` (lane G,
+  PRs #4–#8) yet, and `sweep` (PR #1) does not either. Until `cli.py` is wired, CLI runs and any
+  result published from them carry no monitor flags, so the "a flagged run never passes" guarantee
+  does not reach them.
+  Done when `eval` and `sweep` run under the fixture's monitors, and a flagged CLI run is
+  reported as flagged and fails the gate.
+- **Lane G small follow-ups** (code in PRs #4–#8).
+  - The monitor check script's frame recorder (`docs/monitor-checks/check_monitors.py`)
+    recomputes the frame statistics instead of calling the adapter's `frame_statistics`, so the
+    two can drift apart.
+  - The container check's frame-statistics tolerance (0.01, in `check_loaded_pipeline.py`) has
+    never run on a CI runner, because the `container` job has not yet got past the GHCR push.
+  - `FrameBand` accepts a band whose low equals its high. Such a band passes only one exact value,
+    so it should be refused like an inverted one.
+
 ## Known risks
 
 - **The ~6.6 GB image is tight on the 14 GB runner disk.** CI pins `ubuntu-24.04` and frees disk
