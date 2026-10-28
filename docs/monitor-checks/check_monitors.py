@@ -212,11 +212,19 @@ def summarize(directory: Path, spike_results: Path | None) -> int:
             )
         cpus = sorted({row.get("cpu", "not recorded") for row in rows})
         notes.append(f"`{path.stem}`: CPU {'; '.join(cpus)}.")
-        if paired:
-            same = sum(row["action_hash"] == known[row["seed"]] for row in paired)
+        # A run cut short hashes fewer actions than the spike's episode did; it cannot match.
+        spike_steps = {row["seed"]: row["steps"] for row in reference}
+        whole = [row for row in paired if row.get("max_steps", 10**9) >= spike_steps[row["seed"]]]
+        if whole:
+            same = sum(row["action_hash"] == known[row["seed"]] for row in whole)
             notes.append(
-                f"`{path.stem}`: action hash equals the spike's on {same}/{len(paired)} "
-                "seeds run by both."
+                f"`{path.stem}`: action hash equals the spike's on {same}/{len(whole)} "
+                "seeds run by both at full length."
+            )
+        if len(whole) < len(paired):
+            notes.append(
+                f"`{path.stem}`: {len(paired) - len(whole)} replayed seeds ran cut short; "
+                "their hashes are not compared."
             )
         by_init = {row["init_state"]: row for row in reference}
         framed = [row for row in rows if "frames" in row and row["seed"] % 50 in by_init]

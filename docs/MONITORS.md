@@ -90,6 +90,26 @@ What these numbers can and cannot show:
   across CPUs (D9a). Both ran on the spike's host, an AMD Ryzen 7 5800X under Docker Desktop.
   Rows from runs after this check was written also record the CPU model.
 
+## Fault runs under the suite
+
+These runs cover the monitors added after the action bound. The JSONL is in
+`docs/monitor-checks/results-suite/`. Each row records which monitor flagged it, and the step
+where it first did. Each condition ran 5 episodes on the spike's seeds 1000–1004, using the
+spike's own injection. Every flag here comes from a first-steps check, so these episodes were cut
+to 20 steps (`--max-steps 20`). Cut short, their action hashes cannot be compared with the
+spike's. The suite was the one on the provenance branch, which this stack also carries. It holds
+the provenance, action-bound and instruction monitors.
+
+| Condition | Flagged | Flagged by | First flag step | Other monitors |
+|---|---|---|---|---|
+| `instruction_other` (task 1's instruction) | **5/5** | `instruction-set` | 0 on every episode | none flagged |
+| `instruction_paraphrase` | **5/5** | `instruction-set` | 0 on every episode | none flagged |
+
+The real observation carries the instruction as a one-element list under `task`, and the
+monitor reads it there. The paraphrase is flagged by design (D10). In the spike it gave 18/30
+against 15/30 clean on the same starts, so it does no measurable harm. It is flagged because it
+is outside what was evaluated.
+
 ## Reproduce the real-episode check
 
 Build the image from this branch: the source is copied in at build time. Then run each condition,
