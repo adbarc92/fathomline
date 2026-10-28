@@ -10,6 +10,7 @@ added here as their monitors land._
 |---|---|---|---|
 | 1 | Provenance mismatch | `Provenance`: the loaded pipeline's fingerprint against the pinned one | built |
 | 2 | Action out of bounds | `ActionBound`: arm dimensions 0–5 within ±1.1; gripper excluded | built |
+| 3 | Observation shift | `FrameBand`: third-person frame brightness and noise inside a declared band | built |
 | 4 | Instruction outside the declared set | `InstructionSet`: exact match against the task's own instruction | built |
 | 5 | Unseen init | none: held by construction (see `envelope.py`) | declared |
 
@@ -57,6 +58,32 @@ below.
 the spike, lighting, noise, camera, instruction and init faults all left the actions looking
 normal. A subtle metadata swap could also stay inside ±1.1; D10's provenance condition is the
 check meant for that.
+
+## Observation shift
+
+**What it checks.** Every step, the adapter computes two statistics of the third-person frame the
+policy is handed, in 0–255 gray levels. Brightness is the mean of the channel-averaged image.
+Noise is the mean absolute difference between horizontal neighbours, which sensor noise raises
+and dim light lowers. Each statistic must lie in its declared band:
+
+| Statistic | Held-out range, every frame | Band |
+|---|---|---|
+| `image.brightness` | 101.32 to 105.29 | 91.19 to 115.82 |
+| `image.noise` | 5.80 to 6.44 | 5.22 to 7.09 |
+
+**How the band was set.** The rule was fixed before any episode it is scored on was run. It takes
+each statistic's range over every frame of the 50 held-out clean episodes (seeds 1050–1099, the
+same rows as the action-bound check below) and moves each end out by 10% of its value.
+`check_monitors.py --calibrate docs/monitor-checks/results/baseline.jsonl` reproduces it. It was
+not calibrated on the spike's 50 baseline episodes, which it is scored on below. Those share their
+starts with the held-out ones, so frame 0 is the same image in both. The later frames differ.
+
+**What it misses.** It is coarse by design. **It does not catch a camera swap**: the wrist view
+has statistics close to the third-person view's, as the spike found and the check below
+confirms. It also misses anything else that leaves brightness and fine-grained contrast alone,
+such as a moved object, a new texture of similar tone, or a shifted viewpoint. Only the
+third-person camera is checked. The wrist camera's statistics swing too far during clean
+manipulation for a band this simple.
 
 ## Instruction outside the declared set
 
