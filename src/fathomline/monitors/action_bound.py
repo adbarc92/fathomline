@@ -22,7 +22,8 @@ class ActionBound:
 
     A value exactly at the limit is inside. A NaN or an infinity is outside: a
     NaN compares false against every bound, so "is it above the limit?" alone
-    would pass it. One flag per step, naming every dimension out of bounds.
+    would pass it. One flag per step, naming every dimension out of bounds with its exact
+    value, so a value just past the limit never reads as inside it.
     """
 
     def __init__(self, *, limit: float, dims: Sequence[int], name: str = "action-bound") -> None:
@@ -58,7 +59,7 @@ class ActionBound:
         outside = [(dim, action[dim]) for dim in self._dims if not abs(action[dim]) <= self._limit]
         if not outside:
             return []
-        values = ", ".join(f"dim {dim} = {value:.4g}" for dim, value in outside)
+        values = ", ".join(f"dim {dim} = {value!r}" for dim, value in outside)
         return [
             Flag(
                 monitor=self._name,

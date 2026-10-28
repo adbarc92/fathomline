@@ -1,6 +1,7 @@
 """The declared envelope of the D1 fixture (ruling D10): SmolVLA on LIBERO `libero_object`.
 
-A run is in the envelope only if every condition below holds. Each value is
+A run is in the envelope only if every condition D10 rules holds; each is listed
+below once its monitor, or its reason for having none, has landed. Each value is
 declared here, from the ruling, and is not re-fitted from a run's data: a bound
 tuned to the episodes it then judges says nothing about them.
 
@@ -14,8 +15,10 @@ tuned to the episodes it then judges says nothing about them.
 * **Unseen init.** Declared and enforced by construction, with no runtime
   monitor. The harness picks every episode's initial state itself, as
   `seed % n` over the task's `n` benchmark init states (`LeRobotEnv.reset`), so
-  its own runs cannot start outside them. A monitor becomes necessary once the
-  harness runs initial states it did not choose.
+  its own runs cannot start outside them. That holds only while the env has the
+  benchmark init states loaded, as the fixture's does; without them, `reset`
+  leaves the choice to LeRobot. A monitor becomes necessary once the harness runs
+  initial states it did not choose.
 """
 
 from __future__ import annotations
@@ -31,5 +34,5 @@ ARM_ACTION_LIMIT = 1.1
 
 
 def fixture_monitors() -> MonitorSuite:
-    """The monitors for a run of the D1 fixture, one per runtime condition in D10."""
+    """The monitors for a run of the D1 fixture, one per runtime condition in D10 built so far."""
     return MonitorSuite([ActionBound(limit=ARM_ACTION_LIMIT, dims=LIBERO_ARM_DIMS)])

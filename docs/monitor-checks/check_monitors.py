@@ -1,7 +1,7 @@
 """Lane G: run the D1 fixture's declared monitors on real episodes, clean and with a fault injected.
 
-Runs inside the image, with this directory, the envelope spike's directory and an output
-directory mounted:
+Runs inside an image built from this branch, with this directory, the envelope spike's
+directory and an output directory mounted:
 
     docker run --rm --network none --cpuset-cpus 0-3 --memory 12g \
       -v "$PWD/docs/monitor-checks:/check:ro" -v "$PWD/docs/spike-envelope:/spike:ro" \
@@ -11,11 +11,13 @@ directory mounted:
 Each episode runs through the core's `run_episode` with `fixture_monitors()`, the suite the
 envelope declares, so every monitor that lands in it is checked here without editing this file.
 A fault is injected by the envelope spike's own `install` (`docs/spike-envelope/run_envelope.py`),
-unchanged, so a condition here is the same fault the spike measured: on the seeds both ran, the
-action hashes must match the spike's.
+unchanged, so a condition here is the same fault the spike measured. On seeds both ran, the
+action hashes should equal the spike's when run on the same CPU (the hash is known to differ
+across CPUs, D9a); each row records the CPU model.
 
-One JSON line per episode goes to `/out/<condition>.jsonl`. `--summarize DIR` prints a table
-per condition from those files, on any machine.
+One JSON line per episode goes to `<out>/<condition>.jsonl`; a seed already in that file is
+refused rather than appended twice. `--summarize DIR` prints a table per condition from those
+files, on any machine, and fails on a duplicated seed.
 """
 
 from __future__ import annotations
@@ -47,10 +49,11 @@ class _ArmPeak:
 class _FrameStats:
     """Never flags. Per camera: frame-0 brightness and noise, and their range over every frame.
 
-    The statistics are the spike's (`frame_stats` in `run_envelope.py`: the channel-mean gray
-    level and the mean absolute difference between horizontal neighbours), read from the
-    observation the policy is handed, scaled back to 0-255. Recorded for the observation-shift
-    band, which is calibrated on held-out clean episodes.
+    The statistics are meant to be the spike's (`frame_stats` in `run_envelope.py`: the
+    channel-mean gray level and the mean absolute difference between horizontal neighbours),
+    read here from the observation the policy is handed and scaled back to 0-255. The spike read
+    the raw frame; `--summarize` compares frame 0 with the spike's on the same init state.
+    Recorded for the observation-shift band, which is calibrated on held-out clean episodes.
     """
 
     name = "check-frame-stats"
@@ -81,9 +84,32 @@ class _FrameStats:
         return out
 
 
+def _cpu_model() -> str:
+    for line in Path("/proc/cpuinfo").read_text().splitlines():
+        if line.startswith("model name"):
+            return line.split(":", 1)[1].strip()
+    return "unknown"
+
+
+def _rows(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text().splitlines() if line]
+
+
 def run(condition: str, seeds: range, out: Path, spike: Path) -> None:
     sys.path.insert(0, str(spike))
-    from run_envelope import install  # the spike's fault injection, unchanged
+    from run_envelope import CONDITIONS, install  # the spike's fault injection, unchanged
+
+    if condition not in CONDITIONS:
+        # `install` does nothing for an unknown name: a typo would run clean under a fault's label.
+        raise SystemExit(
+            f"unknown condition {condition!r}; the spike's are {', '.join(CONDITIONS)}"
+        )
+    sink = out / f"{condition}.jsonl"
+    done = {row["seed"] for row in _rows(sink)} & set(seeds)
+    if done:
+        raise SystemExit(f"{sink} already has seeds {sorted(done)}; refusing to append them twice")
 
     from fathomline.adapters.lerobot.adapter import load_fixture
     from fathomline.core import run_episode
@@ -93,7 +119,7 @@ def run(condition: str, seeds: range, out: Path, spike: Path) -> None:
     frames: list[Any] = []
     noise: list[Any] = [None]
     install(condition, env, policy, frames, noise)
-    sink = out / f"{condition}.jsonl"
+    cpu = _cpu_model()
 
     import numpy as np
 
@@ -123,6 +149,7 @@ def run(condition: str, seeds: range, out: Path, spike: Path) -> None:
             "first_flag_reason": flags[0].reason if flags else None,
             "arm_peak": round(peak.peak, 4),
             "frames": frame_stats.summary(),
+            "cpu": cpu,
             "episode_s": round(time.perf_counter() - start, 1),
         }
         with sink.open("a") as handle:
@@ -131,30 +158,71 @@ def run(condition: str, seeds: range, out: Path, spike: Path) -> None:
     env.close()
 
 
-def summarize(directory: Path, spike_results: Path | None) -> None:
-    print("| Condition | Seeds | Flagged | First flag step (min / median / max) | Arm peak range |")
+def _ranges(seeds: list[int]) -> str:
+    spans: list[str] = []
+    start = previous = seeds[0]
+    for seed in [*seeds[1:], None]:
+        if seed is not None and seed == previous + 1:
+            previous = seed
+            continue
+        spans.append(f"{start}-{previous}" if start != previous else str(start))
+        if seed is not None:
+            start = previous = seed
+    return ", ".join(spans)
+
+
+def summarize(directory: Path, spike_results: Path | None) -> int:
+    print(
+        "| Condition | Seeds (n) | Flagged | First flag step (min / median / max) "
+        "| Arm peak range |"
+    )
     print("|---|---|---|---|---|")
     notes: list[str] = []
     for path in sorted(directory.glob("*.jsonl")):
-        rows = [json.loads(line) for line in path.read_text().splitlines() if line]
+        rows = _rows(path)
         seeds = sorted(row["seed"] for row in rows)
+        if len(set(seeds)) != len(seeds):
+            repeated = sorted({seed for seed in seeds if seeds.count(seed) > 1})
+            print(f"{path}: seeds {repeated} appear more than once", file=sys.stderr)
+            return 1
         steps = [row["first_flag_step"] for row in rows if row["flagged"]]
         step_text = f"{min(steps)} / {statistics.median(steps):g} / {max(steps)}" if steps else "-"
         peaks = [row["arm_peak"] for row in rows]
         print(
-            f"| `{path.stem}` | {seeds[0]}-{seeds[-1]} | {len(steps)}/{len(rows)} | {step_text} "
-            f"| {min(peaks):.2f} to {max(peaks):.2f} |"
+            f"| `{path.stem}` | {_ranges(seeds)} ({len(seeds)}) | {len(steps)}/{len(rows)} "
+            f"| {step_text} | {min(peaks):.2f} to {max(peaks):.2f} |"
         )
-        if spike_results is not None and (spike_results / path.name).exists():
-            known = {
-                row["seed"]: row["action_hash"]
-                for row in map(json.loads, (spike_results / path.name).read_text().splitlines())
-            }
-            paired = [row for row in rows if row["seed"] in known]
+        cpus = sorted({row.get("cpu", "not recorded") for row in rows})
+        notes.append(f"`{path.stem}`: CPU {'; '.join(cpus)}.")
+        if spike_results is None:
+            continue
+        reference = _rows(spike_results / path.name)
+        known = {row["seed"]: row["action_hash"] for row in reference}
+        paired = [row for row in rows if row["seed"] in known]
+        if paired:
             same = sum(row["action_hash"] == known[row["seed"]] for row in paired)
-            notes.append(f"`{path.stem}`: action hash equals the spike's on {same}/{len(paired)}")
+            notes.append(
+                f"`{path.stem}`: action hash equals the spike's on {same}/{len(paired)} "
+                "seeds run by both."
+            )
+        by_init = {row["init_state"]: row for row in reference}
+        framed = [row for row in rows if "frames" in row and row["seed"] % 50 in by_init]
+        if framed:
+            gaps = [
+                max(
+                    abs(row["frames"]["image"]["frame0_brightness"] - spike["frame0_brightness"]),
+                    abs(row["frames"]["image"]["frame0_noise"] - spike["frame0_noise"]),
+                )
+                for row in framed
+                for spike in [by_init[row["seed"] % 50]]
+            ]
+            notes.append(
+                f"`{path.stem}`: frame-0 brightness and noise differ from the spike's on the same "
+                f"init state by at most {max(gaps):.3f} ({len(framed)} episodes)."
+            )
     for note in notes:
-        print(f"\n{note} seeds run by both.")
+        print(f"\n{note}")
+    return 0
 
 
 def main() -> int:
@@ -165,12 +233,13 @@ def main() -> int:
     parser.add_argument("--out", type=Path, default=Path("/out"))
     parser.add_argument("--spike", type=Path, default=Path("/spike"))
     parser.add_argument("--summarize", type=Path, help="print the tables for a results directory")
-    parser.add_argument("--spike-results", type=Path, help="compare action hashes with these")
+    parser.add_argument("--spike-results", type=Path, help="compare with the spike's JSONL here")
     args = parser.parse_args()
 
     if args.summarize:
-        summarize(args.summarize, args.spike_results)
-        return 0
+        return summarize(args.summarize, args.spike_results)
+    if not args.condition:
+        parser.error("at least one --condition is required")
     args.out.mkdir(parents=True, exist_ok=True)
     seeds = range(args.first_seed, args.first_seed + args.episodes)
     for condition in args.condition:  # a fresh fixture per condition, so no patch carries over

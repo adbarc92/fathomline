@@ -3,12 +3,12 @@
 D10 rules the condition as: **arm dimensions only, +/-1.1, a fixed declared value**.
 The gripper is excluded and the training range is not the bound. The values the
 tests pin against are the envelope spike's (`docs/SPIKE-envelope.md`): clean arm
-peaks reached 1.01, the gripper 1.12 on every condition, and lost action stats
-pushed the arm to 2.27-2.68.
+peaks reached 1.01, the gripper 1.06-1.12 on every condition, clean or not, and
+lost action stats pushed the arm to 2.27-2.68.
 
 The fault is injected the way it happens: the policy's output is unnormalized
-with the wrong statistics, so the arm leaves its range while the gripper, which
-is clipped to its command range either way, carries no signal.
+with the wrong statistics, so the arm leaves its range. The gripper is held
+beyond +/-1 throughout, as on clean runs, and must not be what flags.
 """
 
 from __future__ import annotations
@@ -77,6 +77,22 @@ def test_the_fixture_monitors_include_the_action_bound() -> None:
     assert "action-bound" in suite.name
 
 
+@pytest.mark.parametrize("dim", LIBERO_ARM_DIMS)
+@pytest.mark.parametrize("sign", [1.0, -1.0])
+def test_the_fixture_suite_holds_every_arm_dimension_to_the_ruled_bound(
+    dim: int, sign: float
+) -> None:
+    # The suite the fixture is run with, not only the constants: +/-1.1 on dims 0-5.
+    suite = fixture_monitors()
+    assert list(suite.on_step(_record(_arm(sign * 1.1, dim=dim)))) == []
+    (flag,) = suite.on_step(_record(_arm(sign * 1.1001, dim=dim)))
+    assert f"dim {dim}" in flag.reason
+
+
+def test_the_fixture_suite_does_not_monitor_the_gripper() -> None:
+    assert list(fixture_monitors().on_step(_record(_arm(0.5, gripper=5.0)))) == []
+
+
 def test_the_fixture_suite_flags_lost_stats_and_passes_a_clean_step() -> None:
     suite = fixture_monitors()
     assert list(suite.on_step(_record(_arm(1.01)))) == []
@@ -115,6 +131,12 @@ def test_a_non_finite_arm_value_is_flagged(value: float) -> None:
     # the limit?" would wave it through.
     (flag,) = _monitor().on_step(_record(_arm(value, dim=3)))
     assert "dim 3" in flag.reason
+
+
+def test_the_reason_shows_the_excess_beyond_the_bound() -> None:
+    # Rounded to a few digits, 1.1001 would read "dim 0 = 1.1": flagged, yet shown inside.
+    (flag,) = _monitor().on_step(_record(_arm(1.1001)))
+    assert "dim 0 = 1.1001" in flag.reason
 
 
 def test_one_flag_per_step_names_every_dimension_out_of_bounds() -> None:
@@ -173,7 +195,7 @@ class _ArmPolicy:
     """A seven-dimensional policy on the fake: six arm dimensions and a gripper.
 
     The fake's own action, a normalized command, is unnormalized per arm dimension
-    as `z * std + mean`, the way LeRobot's postprocessor does. With the right
+    as `z * std` (mean 0 here), the way LeRobot's postprocessor does. With the right
     statistics the arm stays well inside the bound. `lost_stats_from` swaps in
     mean 0, std 1 from that step on: the "action metadata lost" fault. The gripper
     is held at a clean-run value beyond +/-1 throughout.
