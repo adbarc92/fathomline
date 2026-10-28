@@ -60,7 +60,8 @@ class FrameBand:
                 )
             value = stats[stat]
             if not low <= value <= high:
-                outside.append(f"{stat} = {value:.4g} not in [{low:g}, {high:g}]")
+                # Exact values: rounded, a value just outside would read as on the edge.
+                outside.append(f"{stat} = {value!r} not in [{low!r}, {high!r}]")
         if not outside:
             return []
         return [

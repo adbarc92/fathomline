@@ -109,6 +109,12 @@ def test_a_value_outside_its_band_is_flagged_and_named(stat: str, value: float) 
     assert other not in flag.reason
 
 
+def test_the_reason_shows_a_value_just_outside_its_band_exactly() -> None:
+    # Rounded, 5.2999 would read as "5.3 not in [5.3, 7.0]": flagged, yet shown inside.
+    (flag,) = _monitor({**CLEAN, "image.noise": 5.2999}).on_step(_record())
+    assert "image.noise = 5.2999" in flag.reason
+
+
 def test_one_flag_per_step_names_every_statistic_out_of_band() -> None:
     (flag,) = _monitor({"image.brightness": 37.0, "image.noise": 2.2}).on_step(_record())
     assert "image.brightness" in flag.reason
