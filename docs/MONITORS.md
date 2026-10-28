@@ -9,6 +9,7 @@ added here as their monitors land._
 | D10 | Condition | Monitor | Status |
 |---|---|---|---|
 | 2 | Action out of bounds | `ActionBound`: arm dimensions 0–5 within ±1.1; gripper excluded | built |
+| 4 | Instruction outside the declared set | `InstructionSet`: exact match against the task's own instruction | built |
 | 5 | Unseen init | none: held by construction (see `envelope.py`) | declared |
 
 ## Action out of bounds
@@ -27,6 +28,21 @@ below.
 the spike, lighting, noise, camera, instruction and init faults all left the actions looking
 normal. A subtle metadata swap could also stay inside ±1.1; D10's provenance condition is the
 check meant for that.
+
+## Instruction outside the declared set
+
+**What it checks.** Every step, the instruction in the observation (`task`) must be, exactly,
+one of the declared instructions: for the fixture, `libero_object` task 0's own, "pick up the
+alphabet soup and place it in the basket". There is no normalization of case, whitespace or
+punctuation. A step with no instruction, or one that is not text, stops the episode rather
+than passing.
+
+**Paraphrases are flagged by design.** In the spike, task 1's instruction on task 0's scene gave
+0/30, and a paraphrase gave 18/30, no measurable harm. Both are outside what the fixture was
+evaluated on, and the envelope claims only what was evaluated.
+
+**What it misses.** It reads the instruction the env hands the policy. A fault after that point,
+in tokenization for example, is not seen here.
 
 ## Real-episode check
 
