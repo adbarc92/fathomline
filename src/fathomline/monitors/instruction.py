@@ -26,6 +26,9 @@ class InstructionSet:
     def __init__(
         self, *, declared: Collection[str], key: str = "task", name: str = "instruction-set"
     ) -> None:
+        if isinstance(declared, str):
+            # A string is a collection of its characters; it would declare each one.
+            raise TypeError("declared must be a collection of instructions, not a string")
         if not declared:
             raise ValueError("an InstructionSet needs at least one declared instruction")
         if not all(isinstance(instruction, str) for instruction in declared):
@@ -67,4 +70,4 @@ def _instructions(value: object) -> tuple[str, ...]:
         texts = tuple(text for text in value if isinstance(text, str))
         if len(texts) == len(value):
             return texts
-    raise TypeError(f"an instruction must be a string or a list of strings, got {value!r}")
+    raise TypeError(f"an instruction must be a string or a list or tuple of strings, got {value!r}")

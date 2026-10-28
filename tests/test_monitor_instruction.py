@@ -52,6 +52,22 @@ def test_the_fixture_monitors_include_the_instruction_monitor() -> None:
     assert "instruction-set" in suite.name
 
 
+def _fixture_step(task: object) -> StepRecord:
+    # A LIBERO-shaped action inside every bound, so only the instruction can flag.
+    return StepRecord(index=0, observation={"task": task}, action=(0.0,) * 7, reward=0.0)
+
+
+def test_the_fixture_suite_passes_the_task_own_instruction() -> None:
+    assert list(fixture_monitors().on_step(_fixture_step([TASK_0]))) == []
+
+
+@pytest.mark.parametrize("instruction", [TASK_1, PARAPHRASE])
+def test_the_fixture_suite_flags_any_other_instruction(instruction: str) -> None:
+    # The suite the fixture runs with, not only the constant: a widened set would pass these.
+    (flag,) = fixture_monitors().on_step(_fixture_step([instruction]))
+    assert flag.monitor == "instruction-set"
+
+
 # --- One step -----------------------------------------------------------------------------------
 
 
@@ -116,6 +132,12 @@ def test_an_instruction_that_is_not_text_is_refused(task: object) -> None:
 def test_an_empty_declared_set_is_refused() -> None:
     with pytest.raises(ValueError, match="at least one"):
         InstructionSet(declared=set())
+
+
+def test_a_bare_string_as_the_declared_set_is_refused() -> None:
+    # A string is a collection of characters: it would declare 'p', 'i', 'c', ...
+    with pytest.raises(TypeError, match="not a string"):
+        InstructionSet(declared=TASK_0)
 
 
 def test_a_declared_instruction_that_is_not_text_is_refused() -> None:
