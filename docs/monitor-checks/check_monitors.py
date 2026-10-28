@@ -15,6 +15,10 @@ unchanged, so a condition here is the same fault the spike measured. On seeds bo
 action hashes should equal the spike's when run on the same CPU (the hash is known to differ
 across CPUs, D9a); each row records the CPU model.
 
+One condition is this check's own, because the spike injected none like it:
+`rename_swap` exchanges the two cameras in the loaded policy's rename map, a camera mix-up
+in configuration rather than in the pixel stream (the spike's `camera_swap`).
+
 One JSON line per episode goes to `<out>/<condition>.jsonl`; a seed already in that file is
 refused rather than appended twice. `--summarize DIR` prints a table per condition from those
 files, on any machine, and fails on a duplicated seed.
@@ -84,6 +88,21 @@ class _FrameStats:
         return out
 
 
+#: Conditions this check injects itself; every other name is the spike's.
+OWN_CONDITIONS = ("rename_swap",)
+
+
+def _swap_cameras_in_rename_map(policy: Any) -> None:
+    for step in policy._preprocessor.steps:
+        if type(step).__name__ == "RenameObservationsProcessorStep":
+            image, image2 = "observation.images.image", "observation.images.image2"
+            mapping = dict(step.rename_map)
+            mapping[image], mapping[image2] = mapping[image2], mapping[image]
+            step.rename_map = mapping
+            return
+    raise RuntimeError("no RenameObservationsProcessorStep in the policy preprocessor")
+
+
 def _cpu_model() -> str:
     for line in Path("/proc/cpuinfo").read_text().splitlines():
         if line.startswith("model name"):
@@ -101,10 +120,10 @@ def run(condition: str, seeds: range, out: Path, spike: Path, step_limit: int | 
     sys.path.insert(0, str(spike))
     from run_envelope import CONDITIONS, install  # the spike's fault injection, unchanged
 
-    if condition not in CONDITIONS:
+    if condition not in (*CONDITIONS, *OWN_CONDITIONS):
         # `install` does nothing for an unknown name: a typo would run clean under a fault's label.
         raise SystemExit(
-            f"unknown condition {condition!r}; the spike's are {', '.join(CONDITIONS)}"
+            f"unknown condition {condition!r}; known: {', '.join((*CONDITIONS, *OWN_CONDITIONS))}"
         )
     sink = out / f"{condition}.jsonl"
     done = {row["seed"] for row in _rows(sink)} & set(seeds)
@@ -121,7 +140,13 @@ def run(condition: str, seeds: range, out: Path, spike: Path, step_limit: int | 
         max_steps = min(max_steps, step_limit)
     frames: list[Any] = []
     noise: list[Any] = [None]
-    install(condition, env, policy, frames, noise)
+    install(condition, env, policy, frames, noise)  # a no-op for this check's own conditions
+    if condition == "rename_swap":
+        _swap_cameras_in_rename_map(policy)
+
+    def loaded_pipeline() -> dict[str, str]:
+        return {**env.loaded_pipeline(), **policy.loaded_pipeline()}
+
     cpu = _cpu_model()
 
     import numpy as np
@@ -136,7 +161,7 @@ def run(condition: str, seeds: range, out: Path, spike: Path, step_limit: int | 
             policy,
             seed=seed,
             max_steps=max_steps,
-            monitors=(fixture_monitors(), peak, frame_stats),
+            monitors=(fixture_monitors(loaded_pipeline=loaded_pipeline), peak, frame_stats),
         )
         flags = result.flags
         row = {
@@ -151,6 +176,10 @@ def run(condition: str, seeds: range, out: Path, spike: Path, step_limit: int | 
             "flag_monitors": sorted({flag.monitor for flag in flags}),
             "first_flag_step": flags[0].step if flags else None,
             "first_flag_reason": flags[0].reason if flags else None,
+            "first_flag_step_by_monitor": {
+                monitor: min(flag.step for flag in flags if flag.monitor == monitor)
+                for monitor in {flag.monitor for flag in flags}
+            },
             "arm_peak": round(peak.peak, 4),
             "frames": frame_stats.summary(),
             "cpu": cpu,
@@ -209,6 +238,16 @@ def summarize(directory: Path, spike_results: Path | None) -> int:
                 f"| `{path.stem}` | {kind} | {_ranges(group_seeds)} ({len(group)}) "
                 f"| {len(steps)}/{len(group)} | {step_text} "
                 f"| {min(peaks):.2f} to {max(peaks):.2f} |"
+            )
+        by_monitor: dict[str, list[int]] = {}
+        for row in rows:
+            for monitor, step in row.get("first_flag_step_by_monitor", {}).items():
+                by_monitor.setdefault(monitor, []).append(step)
+        for monitor, firsts in sorted(by_monitor.items()):
+            notes.append(
+                f"`{path.stem}`: `{monitor}` flagged {len(firsts)}/{len(rows)}, first at step "
+                f"{min(firsts)} / {statistics.median(firsts):g} / {max(firsts)} "
+                "(min / median / max)."
             )
         cpus = sorted({row.get("cpu", "not recorded") for row in rows})
         notes.append(f"`{path.stem}`: CPU {'; '.join(cpus)}.")

@@ -87,14 +87,15 @@ def test_the_fixture_suite_holds_every_arm_dimension_to_the_ruled_bound(
     dim: int, sign: float
 ) -> None:
     # The suite the fixture is run with, not only the constants: +/-1.1 on dims 0-5.
-    suite = fixture_monitors()
+    suite = fixture_monitors(loaded_pipeline=lambda: LIBERO_LOADED_PIPELINE)
     assert list(suite.on_step(_record(_arm(sign * 1.1, dim=dim)))) == []
     (flag,) = suite.on_step(_record(_arm(sign * 1.1001, dim=dim)))
     assert f"dim {dim}" in flag.reason
 
 
 def test_the_fixture_suite_does_not_monitor_the_gripper() -> None:
-    assert list(fixture_monitors().on_step(_record(_arm(0.5, gripper=5.0)))) == []
+    suite = fixture_monitors(loaded_pipeline=lambda: LIBERO_LOADED_PIPELINE)
+    assert list(suite.on_step(_record(_arm(0.5, gripper=5.0)))) == []
 
 
 def test_the_fixture_suite_flags_lost_stats_and_passes_a_clean_step() -> None:
