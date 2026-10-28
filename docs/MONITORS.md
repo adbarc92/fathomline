@@ -8,9 +8,34 @@ added here as their monitors land._
 
 | D10 | Condition | Monitor | Status |
 |---|---|---|---|
+| 1 | Provenance mismatch | `Provenance`: the loaded pipeline's fingerprint against the pinned one | built |
 | 2 | Action out of bounds | `ActionBound`: arm dimensions 0–5 within ±1.1; gripper excluded | built |
 | 4 | Instruction outside the declared set | `InstructionSet`: exact match against the task's own instruction | built |
 | 5 | Unseen init | none: held by construction (see `envelope.py`) | declared |
+
+## Provenance mismatch
+
+**What it checks.** Every step, the adapter digests the pipeline as it sits in memory, and the
+monitor compares each digest with the one pinned in `envelope.py`. The components are:
+
+| Component | What is digested |
+|---|---|
+| `policy.unnormalizer` | the tensors the action unnormalizer applies, its features and its mode per feature type |
+| `policy.normalizer` | the same, for the input normalizer |
+| `policy.rename_map` | which env image key feeds which policy camera |
+| `env.cameras` | which simulator camera feeds which env image key |
+
+A component that differs, is missing, or is not declared is flagged. A missing processor step
+digests as an empty list, so it differs too. The pins are the digests of a clean load of the
+pinned fixture; they are stable across loads and resets.
+
+**Why in memory.** `pins.verify` already checks every file on disk. In the spike, the lost-stats
+fault replaced the unnormalizer's statistics after load, and every file still matched its pin.
+
+**What it misses.** It sees configuration, not data. The spike's `camera_swap` exchanged the two
+images in the pixel stream, after the wiring this monitor digests, so it is not flagged here; a
+swap in the rename map is (`rename_swap` below). A fault in a component not listed above, such
+as the tokenizer or the model weights in memory, is not seen either.
 
 ## Action out of bounds
 
