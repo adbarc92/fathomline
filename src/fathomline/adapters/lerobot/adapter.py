@@ -15,6 +15,7 @@ coverage gate (D11) and exercised by the CI `container` job instead.
 
 from __future__ import annotations
 
+import hashlib
 import importlib.metadata
 from collections.abc import Mapping
 from typing import Any
@@ -90,6 +91,12 @@ class LeRobotEnv:
     def close(self) -> None:
         self._vec_env.close()
 
+    def loaded_pipeline(self) -> dict[str, str]:
+        """A digest of the camera wiring as loaded: which simulator camera feeds which image key."""
+        sub_env = self._vec_env.envs[0]
+        cameras = {"names": sub_env.camera_name, "mapping": sub_env.camera_name_mapping}
+        return {"env.cameras": _digest(cameras)}
+
     def _observe(self, raw: Any) -> Observation:
         observation = _preprocess_observation(raw)
         observation["task"] = [self._task_description]
@@ -139,6 +146,67 @@ class LeRobotPolicy:
         if values.ndim != 2 or values.shape[0] != 1:
             raise ValueError(f"expected one action of shape (1, dim), got {values.shape}")
         return tuple(float(value) for value in values[0])
+
+    def loaded_pipeline(self) -> dict[str, str]:
+        """Digests of what the loaded processors use, read from memory, not from disk.
+
+        The (un)normalizers are digested over the tensors they apply (`_tensor_stats`),
+        their features and their mode per feature type; the rename map over its pairs.
+        A step that is missing digests as an empty list, so it differs from the pin too.
+        """
+        return {
+            "policy.normalizer": _digest(
+                [_stats_state(s) for s in _steps(self._preprocessor, "NormalizerProcessorStep")]
+            ),
+            "policy.unnormalizer": _digest(
+                [_stats_state(s) for s in _steps(self._postprocessor, "UnnormalizerProcessorStep")]
+            ),
+            "policy.rename_map": _digest(
+                [
+                    s.rename_map
+                    for s in _steps(self._preprocessor, "RenameObservationsProcessorStep")
+                ]
+            ),
+        }
+
+
+def _steps(processor: Any, kind: str) -> list[Any]:
+    return [step for step in processor.steps if type(step).__name__ == kind]
+
+
+def _stats_state(step: Any) -> dict[str, Any]:
+    return {"features": step.features, "norm_map": step.norm_map, "stats": step._tensor_stats}
+
+
+def _digest(value: Any) -> str:
+    """SHA-256 over a canonical encoding: mappings by sorted key, tensors by dtype, shape, bytes."""
+    digest = hashlib.sha256()
+    _feed(digest, value)
+    return digest.hexdigest()
+
+
+def _feed(digest: Any, value: Any) -> None:
+    def text(item: str) -> None:
+        data = item.encode()
+        digest.update(f"{len(data)}:".encode() + data)
+
+    if isinstance(value, Mapping):
+        digest.update(b"{")
+        for key in sorted(value, key=str):
+            text(str(key))
+            _feed(digest, value[key])
+        digest.update(b"}")
+    elif isinstance(value, list | tuple):
+        digest.update(b"[")
+        for item in value:
+            _feed(digest, item)
+        digest.update(b"]")
+    elif isinstance(value, torch.Tensor):
+        tensor = value.detach().to("cpu").contiguous()
+        text(f"tensor {tensor.dtype} {tuple(tensor.shape)}")
+        digest.update(tensor.numpy().tobytes())
+    else:
+        text(repr(value))
 
 
 def _installed(distribution: str) -> str:
