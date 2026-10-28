@@ -97,8 +97,10 @@ These runs cover the monitors added after the action bound. The JSONL is in
 where it first did. Each condition ran 5 episodes on the spike's seeds 1000–1004, using the
 spike's own injection. Every flag here comes from a first-steps check, so these episodes were cut
 to 20 steps (`--max-steps 20`). Cut short, their action hashes cannot be compared with the
-spike's. The suite was the one on the provenance branch, which this stack also carries. It holds
-the provenance, action-bound and instruction monitors.
+spike's. The rows were made with the suite and check script of PR #6 (provenance, action bound
+and instruction), which records the first flag step per monitor; this file's check script is the
+later one, so build from #6 or later to regenerate them. "Other monitors" covers those 20 steps;
+in the spike's full-length instruction runs the arm never passed 1.04, under the 1.1 bound.
 
 | Condition | Flagged | Flagged by | First flag step | Other monitors |
 |---|---|---|---|---|
