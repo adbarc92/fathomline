@@ -171,6 +171,7 @@ def load_fixture() -> tuple[LeRobotEnv, LeRobotPolicy, int]:
             "--use_amp=false",
             # The pinned local snapshot instead of the repo id the checkpoint names.
             f"--vlm_model_name={vlm_dir}",
+            f"--n_action_steps={pins.N_ACTION_STEPS}",
         ],
     )
     policy_cfg.pretrained_path = policy_dir
