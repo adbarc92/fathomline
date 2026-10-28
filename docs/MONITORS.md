@@ -46,17 +46,19 @@ first flag. The arm peak is each episode's largest arm magnitude.
   against three of 50 in the spike, and none reached 1.1. The clean episodes succeeded 29 times in
   50.
 - **Same episodes as the spike.** On the 30 replayed seeds the action hashes equal the spike's
-  (30/30). On all 80 episodes, frame-0 brightness and noise match the spike's on the same start
-  to within 0.005.
+  (30/30), and so do their arm peaks. On the 80 episodes that recorded frame statistics (all but
+  the replay), frame-0 brightness and noise match the spike's on the same start to within 0.005.
 - **Episode length.** The new lost-stats episodes were cut to 60 steps (`--max-steps 60`). Every
   first flag came by step 7. The replayed ones ran the full 280. Clean episodes always run to the
   task's own limit.
 - **Which code produced which rows.** The clean rows and the replayed lost-stats rows came from
-  runs started before the check recorded the CPU model. Their flag reasons also round the value
-  (`dim 1 = -1.318`); the merged code prints the exact value. That changes the message only: the
+  earlier, uncommitted versions of this check. Neither version recorded the CPU model, and the
+  replay's version did not record frame statistics or a step limit either. Their flag reasons
+  also round the value (`dim 1 = -1.318`); the merged code prints the exact value. That changes the message only: the
   flag decisions are the same comparison. The new lost-stats rows come from the current code. Every
-  row ran on the same image (`lerobot==0.6.1`, the pinned snapshots) with the branch's
-  `src/` mounted over the image's copy.
+  row ran on the same image, built from `main` (`lerobot==0.6.1`, the pinned snapshots), with
+  the branch's `src/` mounted over the image's copy. That is equivalent to building from this
+  branch, which changes nothing the image's other layers are built from.
 
 What these numbers can and cannot show:
 
