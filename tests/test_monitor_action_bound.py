@@ -220,15 +220,14 @@ def test_a_clean_run_is_not_flagged() -> None:
 def test_lost_action_stats_flag_every_episode() -> None:
     run = _run(_ArmPolicy(lost_stats_from=0))
     assert all(episode.flags for episode in run.episodes)
-    assert {flag.monitor for episode in run.episodes for flag in episode.flags} == {
-        "action-bound"
-    }
+    assert {flag.monitor for episode in run.episodes for flag in episode.flags} == {"action-bound"}
 
 
 def test_the_flag_fires_at_the_step_the_stats_are_lost() -> None:
-    run = _run(_ArmPolicy(lost_stats_from=5))
+    # The fake's episodes last five steps; the stats are lost on the fourth.
+    run = _run(_ArmPolicy(lost_stats_from=3))
     for episode in run.episodes:
-        assert episode.flags[0].step == 5
+        assert episode.flags[0].step == 3
 
 
 def test_a_run_with_lost_stats_fails_the_gate_even_when_every_episode_succeeds() -> None:
