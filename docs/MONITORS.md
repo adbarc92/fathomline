@@ -140,8 +140,8 @@ in the spike's full-length instruction runs the arm never passed 1.04, under the
 
 Provenance flags lost stats at step 0, before any action leaves its bound; the action bound
 follows a few steps later. The spike's pixel-level `camera_swap` is the monitor's stated miss:
-it changes no wiring the monitor digests, and the observation-shift runs below show provenance
-silent on it.
+it changes no wiring the monitor digests. The observation-shift PR (#8) runs it under the
+full suite.
 
 The real observation carries the instruction as a one-element list under `task`, and the
 monitor reads it there. The paraphrase is flagged by design (D10). In the spike it gave 18/30
