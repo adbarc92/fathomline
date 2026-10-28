@@ -191,7 +191,8 @@ def summarize(directory: Path, spike_results: Path | None) -> int:
         known = {row["seed"]: row["action_hash"] for row in reference}
         paired = [row for row in rows if row["seed"] in known]
         new = [row for row in rows if row["seed"] not in known]
-        for kind, group in (("replay of the spike's", paired), ("new", new)):
+        new_kind = "new" if spike_results is not None else "not compared with the spike"
+        for kind, group in (("replay of the spike's", paired), (new_kind, new)):
             if not group:
                 continue
             group_seeds = sorted(row["seed"] for row in group)
