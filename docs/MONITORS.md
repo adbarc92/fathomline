@@ -83,7 +83,8 @@ has statistics close to the third-person view's, as the spike found and the chec
 confirms. It also misses anything else that leaves brightness and fine-grained contrast alone,
 such as a moved object, a new texture of similar tone, or a shifted viewpoint. Only the
 third-person camera is checked. The wrist camera's statistics swing too far during clean
-manipulation for a band this simple.
+manipulation for a band this simple: brightness 86 to 132 and noise 1.7 to 7.4 over the held-out
+clean episodes.
 
 ## Instruction outside the declared set
 
