@@ -36,6 +36,15 @@ def test_every_pin_names_a_full_revision_sha_and_a_content_digest(pin: pins.HubP
     assert SHA256.fullmatch(pin.digest)
 
 
+def test_the_fixture_replans_every_ten_actions_not_once_per_chunk() -> None:
+    """The checkpoint's config plays a whole 50-action chunk before it looks again.
+
+    That setting is SmolVLA's worst on LIBERO: the paper's Table 13 gives 70% on Object
+    against 94% at 10, and huggingface/lerobot#4614 measures the same gap on this checkpoint.
+    """
+    assert pins.N_ACTION_STEPS == 10
+
+
 def test_the_digest_covers_content_and_paths(tmp_path: Path) -> None:
     base = pins.tree_digest(_tree(tmp_path / "a", {"x.xml": b"1", "sub/y.obj": b"2"}))
     same = pins.tree_digest(_tree(tmp_path / "b", {"sub/y.obj": b"2", "x.xml": b"1"}))
