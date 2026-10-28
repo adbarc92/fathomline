@@ -80,7 +80,7 @@ jobs:
           fi
           changed=$(git diff --name-only HEAD^1 HEAD)
           echo "$changed"
-          if echo "$changed" | grep -qE '^(Dockerfile|\.dockerignore|uv\.lock|pyproject\.toml|\.github/workflows/|src/fathomline/(adapters/|core/|cli\.py|__init__\.py|__main__\.py|monitors/envelope\.py)|docs/monitor-checks/check_loaded_pipeline\.py)'; then
+          if echo "$changed" | grep -qE '^(Dockerfile|\.dockerignore|uv\.lock|pyproject\.toml|\.github/workflows/|src/fathomline/(adapters/|core/|cli\.py|__init__\.py|__main__\.py|monitors/envelope\.py)|docs/monitor-checks/check_loaded_pipeline\.py|docs/spike-envelope/run_envelope\.py)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"

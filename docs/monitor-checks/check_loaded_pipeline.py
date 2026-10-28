@@ -79,6 +79,9 @@ def main() -> int:
                 {"policy.rename_map"},
             )
             step.rename_map = original
+            break
+    else:
+        expect("a rename step in the policy preprocessor", {"missing"}, set())
 
     apply_unnorm_identity(policy)
     expect("lost action stats", _changed(pins, _fingerprint(env, policy)), {"policy.unnormalizer"})
