@@ -80,7 +80,7 @@ jobs:
           fi
           changed=$(git diff --name-only HEAD^1 HEAD)
           echo "$changed"
-          if echo "$changed" | grep -qE '^(Dockerfile|\.dockerignore|uv\.lock|pyproject\.toml|\.github/workflows/|src/fathomline/(adapters/|core/|cli\.py|__init__\.py|__main__\.py))'; then
+          if echo "$changed" | grep -qE '^(Dockerfile|\.dockerignore|uv\.lock|pyproject\.toml|\.github/workflows/|src/fathomline/(adapters/|core/|cli\.py|__init__\.py|__main__\.py|monitors/envelope\.py)|docs/monitor-checks/check_loaded_pipeline\.py|docs/spike-envelope/run_envelope\.py)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
@@ -190,3 +190,13 @@ jobs:
           assert episode["seed"] == 1000 and episode["steps"] >= 1, episode
           print("episode:", {k: episode[k] for k in ("seed", "steps", "success", "max_reward")})
           PY
+
+      # D10 condition 1 (provenance) digests the pipeline in memory, in adapter code the unit
+      # job cannot run (D11). A clean load must match the pins, and two injected faults must
+      # change exactly the component they touch.
+      - name: The loaded pipeline matches its pins
+        if: steps.changes.outputs.run == 'true'
+        run: |
+          docker run --rm --network none \
+            -v "$PWD/docs/monitor-checks:/check:ro" -v "$PWD/docs/spike-envelope:/spike:ro" \
+            --entrypoint python "$IMAGE:sha-${{ github.sha }}" /check/check_loaded_pipeline.py

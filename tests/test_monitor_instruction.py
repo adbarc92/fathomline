@@ -20,6 +20,7 @@ from fathomline.fakes import FakeEnv, FakePolicy
 from fathomline.gates import GateConfig, evaluate
 from fathomline.monitors import (
     LIBERO_INSTRUCTIONS,
+    LIBERO_LOADED_PIPELINE,
     InstructionSet,
     fixture_monitors,
     is_flagged,
@@ -48,7 +49,7 @@ def test_the_declared_set_is_the_fixture_task_instruction_alone() -> None:
 
 
 def test_the_fixture_monitors_include_the_instruction_monitor() -> None:
-    suite = fixture_monitors()
+    suite = fixture_monitors(loaded_pipeline=lambda: LIBERO_LOADED_PIPELINE)
     assert "instruction-set" in suite.name
 
 
@@ -58,13 +59,22 @@ def _fixture_step(task: object) -> StepRecord:
 
 
 def test_the_fixture_suite_passes_the_task_own_instruction() -> None:
-    assert list(fixture_monitors().on_step(_fixture_step([TASK_0]))) == []
+    assert (
+        list(
+            fixture_monitors(loaded_pipeline=lambda: LIBERO_LOADED_PIPELINE).on_step(
+                _fixture_step([TASK_0])
+            )
+        )
+        == []
+    )
 
 
 @pytest.mark.parametrize("instruction", [TASK_1, PARAPHRASE])
 def test_the_fixture_suite_flags_any_other_instruction(instruction: str) -> None:
     # The suite the fixture runs with, not only the constant: a widened set would pass these.
-    (flag,) = fixture_monitors().on_step(_fixture_step([instruction]))
+    (flag,) = fixture_monitors(loaded_pipeline=lambda: LIBERO_LOADED_PIPELINE).on_step(
+        _fixture_step([instruction])
+    )
     assert flag.monitor == "instruction-set"
 
 
