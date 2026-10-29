@@ -1,8 +1,8 @@
 """Lane B's done-when: run-to-run equality, and a test that fails when the seed is removed.
 
 Equality is asserted on per-episode metrics and the action-trajectory hash, never
-on video (D9), and only between runs on the same host: no cross-machine claim is
-made until D9a is ruled.
+on video (D9), and only between runs on the same host. The cross-host claim (D9b)
+rests on the pin `sweep` checks, tested in `test_sweep_cli.py`.
 
 Each run here is persisted and read back before it is compared, so what is shown
 equal is what a later `report`, `gate` or `reproduce` would read, not an object

@@ -58,9 +58,9 @@ parser reading `result.json` must accept them. (A candidate for the next result-
     "logical_cpus": 4,
     "usable_cpus": 4,
     "python_version": "3.12.14",
-    "threading_env": {"OMP_NUM_THREADS": "4"},
-    "torch": {"version": "2.11.0+cpu", "num_threads": 4, "num_interop_threads": 4,
-              "cpu_capability": "AVX512"}
+    "threading_env": {"OMP_NUM_THREADS": "2", "ATEN_CPU_CAPABILITY": "avx2"},
+    "torch": {"version": "2.11.0+cpu", "num_threads": 2, "num_interop_threads": 4,
+              "cpu_capability": "AVX2"}
   },
   "argv": ["sweep", "--seed-set", "smoke", "--run-dir", "runs/smoke"]
 }
@@ -68,11 +68,12 @@ parser reading `result.json` must accept them. (A candidate for the next result-
 
 - `seed_set.digest` is `seed_digest(seeds)`, the SHA-256 of the seeds in order, as recorded in
   `tests.lock`. A re-run can check it ran the same declaration.
-- `host` is recorded, never acted on. It holds what an open ruling (D9a) would scope a determinism
-  claim by: the CPU model and SIMD flags (from `/proc/cpuinfo`; empty off Linux), the CPUs the
+- `host` holds what the determinism claim (D9b) is scoped by: the CPU model and SIMD flags (from `/proc/cpuinfo`; empty off Linux), the CPUs the
   process could use (its affinity mask, i.e. a container's `--cpuset-cpus`), the thread and
   kernel-dispatch environment variables that were set, and torch's thread counts and the
-  instruction set its kernels dispatched to (`null` if the fixture did not import torch).
+  instruction set its kernels dispatched to (`null` if the fixture did not import torch). Only
+  the pin is acted on: `sweep` refuses to run unless torch's `num_threads` and `cpu_capability`
+  are the pinned ones (`fathomline.persist.PINNED_TORCH`), so a persisted run is always under it.
 
 ## `trajectories/<seed>.json`
 
@@ -102,9 +103,9 @@ seeds, every episode's metrics and its action hash (D9), never video. Floats are
 bit, except that any NaN metric equals any NaN (`result.json` keeps no NaN sign). On a hash
 mismatch, `first_divergence` over the two trajectories locates it. Host facts are not compared.
 `run.json`'s `argv` is recorded verbatim, so a run launched with absolute `--lock` or `--run-dir`
-paths carries them: relativize or strip them before publishing a run. **Whether two
-hosts may be expected to agree is the open ruling D9a**; until it is ruled, the equality shown is
-run to run on one host.
+paths carries them: relativize or strip them before publishing a run. **Two hosts are
+expected to agree when both are x86_64 with AVX2 and run under the pin (D9b)**; so far the equality
+has been shown run to run on one host.
 
 ## Changing the format
 

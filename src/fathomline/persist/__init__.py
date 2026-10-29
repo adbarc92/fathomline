@@ -9,7 +9,7 @@ on (`host`), so a determinism claim can be scoped to what was actually shown.
 from __future__ import annotations
 
 from fathomline.persist.compare import Divergence, compare_runs, first_divergence
-from fathomline.persist.host import Host, capture_host
+from fathomline.persist.host import PINNED_TORCH, Host, capture_host, pin_mismatches
 from fathomline.persist.lock import (
     DEFAULT_LOCK,
     LOCK_VERSION,
@@ -34,6 +34,7 @@ from fathomline.persist.rundir import (
 __all__ = [
     "DEFAULT_LOCK",
     "LOCK_VERSION",
+    "PINNED_TORCH",
     "RESULT_FILENAME",
     "RUN_FILENAME",
     "RUN_SCHEMA_VERSION",
@@ -49,6 +50,7 @@ __all__ = [
     "compare_runs",
     "first_divergence",
     "load_lock",
+    "pin_mismatches",
     "read_run",
     "seed_digest",
     "seed_set",

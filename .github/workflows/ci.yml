@@ -194,7 +194,8 @@ jobs:
 
       # Lane B: run-to-run equality on one host (D9). Two sweeps of the declared smoke set, in
       # two fresh containers on this runner, must agree on every episode's metrics and action
-      # hash. No claim across runners: that is the open ruling D9a. Each run records its host.
+      # hash. Across runners the claim is D9b's: the image sets the pin and `sweep` refuses to run
+      # off it. Each run records its host.
       - name: sweep --seed-set smoke twice; the two runs compare equal on this host
         if: steps.changes.outputs.run == 'true'
         run: |

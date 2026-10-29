@@ -1,12 +1,15 @@
 """Host facts: what a run ran *on*, recorded so a determinism claim can be scoped.
 
 The action-trajectory hash has differed between CI runners running identical
-images (D9a, open). Until that is ruled, no claim is made across machines, and
-every persisted run records the facts a ruling would scope a claim by: the CPU
-model and its SIMD flags, how many CPUs the process could use, and the numeric
-runtime's thread and kernel-dispatch settings.
+images: it depends on torch's intra-op thread count and on the instruction set
+its kernels dispatch to (D9a). D9b rules the claim: bit-exact reproduction on
+any x86_64 host with AVX2, under a pin the image sets (`PINNED_TORCH`). Every
+persisted run records what that claim is scoped by: the CPU model and its SIMD
+flags, how many CPUs the process could use, and the numeric runtime's thread
+and kernel-dispatch settings.
 
-Recorded, never acted on: nothing here changes a thread count or a kernel.
+Nothing here changes a thread count or a kernel. `pin_mismatches` only reports
+whether torch is running under the pin; `sweep` refuses to run when it is not.
 """
 
 from __future__ import annotations
@@ -34,6 +37,12 @@ THREADING_ENV = (
 _SIMD_PREFIXES = ("sse", "ssse", "avx", "fma", "f16c", "amx")
 
 CPUINFO = Path("/proc/cpuinfo")
+
+#: The torch settings a bit-exact claim is scoped to (D9b). The image sets them:
+#: `OMP_NUM_THREADS` fixes the intra-op thread count and `ATEN_CPU_CAPABILITY`
+#: the kernels' instruction set. A CPU without AVX2 reports a lower capability,
+#: whatever the variable asks for, so it fails the pin rather than passing it.
+PINNED_TORCH: dict[str, str | int] = {"num_threads": 2, "cpu_capability": "AVX2"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,3 +114,17 @@ def _torch_facts() -> dict[str, str | int] | None:
         "num_interop_threads": int(torch.get_num_interop_threads()),
         "cpu_capability": str(torch.backends.cpu.get_cpu_capability()),
     }
+
+
+def pin_mismatches(host: Host) -> tuple[str, ...]:
+    """Each torch setting that is not the pinned one; empty when the run is under the pin.
+
+    A run that never imported torch (the fakes) has nothing to pin.
+    """
+    if host.torch is None:
+        return ()
+    return tuple(
+        f"torch {key} is {host.torch.get(key)!r}, pinned {pinned!r}"
+        for key, pinned in PINNED_TORCH.items()
+        if host.torch.get(key) != pinned
+    )

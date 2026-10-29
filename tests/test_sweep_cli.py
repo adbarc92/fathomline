@@ -7,6 +7,8 @@ job runs the real one.
 from __future__ import annotations
 
 import importlib.util
+import sys
+import types
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -44,6 +46,21 @@ def lock(tmp_path: Path) -> Path:
 def fake_fixture(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(cli, "_fixture_installed", lambda: True)
     monkeypatch.setattr(cli, "_load_fixture", _fake_fixture)
+    # The fakes never import torch, so there is nothing for the pin to check.
+    monkeypatch.delitem(sys.modules, "torch", raising=False)
+
+
+def _torch(monkeypatch: pytest.MonkeyPatch, *, num_threads: int, cpu_capability: str) -> None:
+    """Stand in for the torch the real fixture imports, with these settings."""
+    torch = types.SimpleNamespace(
+        __version__="2.11.0+cpu",
+        get_num_threads=lambda: num_threads,
+        get_num_interop_threads=lambda: num_threads,
+        backends=types.SimpleNamespace(
+            cpu=types.SimpleNamespace(get_cpu_capability=lambda: cpu_capability)
+        ),
+    )
+    monkeypatch.setitem(sys.modules, "torch", torch)
 
 
 @pytest.mark.usefixtures("fake_fixture")
@@ -119,6 +136,49 @@ def test_without_argv_the_process_command_line_is_recorded(
     monkeypatch.setattr("sys.argv", ["fathomline", *argv])
     assert main() == 0
     assert read_run(run_dir).record.argv == tuple(argv)
+
+
+@pytest.mark.usefixtures("fake_fixture")
+def test_a_sweep_under_the_determinism_pin_runs_and_records_it(
+    tmp_path: Path, lock: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _torch(monkeypatch, num_threads=2, cpu_capability="AVX2")
+    run_dir = tmp_path / "run"
+    assert (
+        main(["sweep", "--seed-set", "pair", "--lock", str(lock), "--run-dir", str(run_dir)]) == 0
+    )
+    torch = read_run(run_dir).record.host.torch
+    assert torch is not None
+    assert (torch["num_threads"], torch["cpu_capability"]) == (2, "AVX2")
+
+
+@pytest.mark.usefixtures("fake_fixture")
+@pytest.mark.parametrize(
+    ("num_threads", "cpu_capability", "named"),
+    [(1, "AVX2", "num_threads is 1"), (2, "AVX512", "cpu_capability is 'AVX512'")],
+)
+def test_a_sweep_off_the_determinism_pin_runs_nothing(
+    tmp_path: Path,
+    lock: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    num_threads: int,
+    cpu_capability: str,
+    named: str,
+) -> None:
+    def must_not_run(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("a sweep ran off the determinism pin")
+
+    monkeypatch.setattr(sweep_command, "run_sweep", must_not_run)
+    _torch(monkeypatch, num_threads=num_threads, cpu_capability=cpu_capability)
+    run_dir = tmp_path / "run"
+    argv = ["sweep", "--seed-set", "pair", "--lock", str(lock), "--run-dir", str(run_dir)]
+    assert main(argv) == EXIT_NOT_RUN
+    captured = capsys.readouterr()
+    assert "determinism pin" in captured.err
+    assert named in captured.err
+    assert captured.out == ""
+    assert not run_dir.exists()
 
 
 def test_an_undeclared_seed_set_runs_nothing(

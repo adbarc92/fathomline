@@ -12,8 +12,9 @@ stderr. Exit codes:
   while it ran, or the written directory did not read back, in which case the
   `.<name>.partial` staging directory is left for diagnosis); nothing was
   overwritten;
-* 2 — nothing was run: the seed set is not declared, the lock is invalid, or
-  the run directory already exists (argparse uses 2 for usage errors too);
+* 2 — nothing was run: the seed set is not declared, the lock is invalid, the
+  run directory already exists, or the loaded fixture's torch is not under the
+  determinism pin (D9b) (argparse uses 2 for usage errors too);
 * 3 — the fixture is not installed here, as for `eval`.
 
 An episode that raises is not caught: the sweep stops with the error, and the
@@ -31,7 +32,7 @@ from pathlib import Path
 
 from fathomline.core.loop import run_sweep
 from fathomline.core.protocols import Env, Policy
-from fathomline.persist.host import capture_host
+from fathomline.persist.host import capture_host, pin_mismatches
 from fathomline.persist.lock import DEFAULT_LOCK, LockError, seed_set
 from fathomline.persist.rundir import RunDirError, write_run
 
@@ -94,13 +95,23 @@ def run(
     # LeRobot and LIBERO print progress on stdout; stdout is reserved for the run directory.
     with contextlib.redirect_stdout(sys.stderr):
         env, policy, max_steps = load_fixture()
+    # Read once the fixture has imported torch, and checked before any episode runs:
+    # a run off the pin is outside the determinism claim, so it is not made at all.
+    host = capture_host()
+    if mismatches := pin_mismatches(host):
+        print(
+            "fathomline sweep: not run: off the determinism pin (D9b): " + "; ".join(mismatches),
+            file=sys.stderr,
+        )
+        return EXIT_NOT_RUN
+    with contextlib.redirect_stdout(sys.stderr):
         sweep = run_sweep(env, policy, seeds=declared.seeds, max_steps=max_steps)
     try:
         write_run(
             run_dir,
             sweep,
             seed_set=declared,
-            host=capture_host(),
+            host=host,
             started_at=f"{started:%Y-%m-%dT%H:%M:%SZ}",
             argv=argv,
         )

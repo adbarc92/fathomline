@@ -42,11 +42,12 @@ Four capabilities. Each is a claim this README only makes once a command proves 
    tested for are written down first, and a run outside them is **flagged, never silently
    reported**. The gate never passes a flagged run. Which conditions are monitored is open
    (ruling D10).
-4. **Determinism** (a goal, under investigation) — each episode records an action-trajectory hash,
-   and every persisted run records the host it ran on, so a run can be compared with a re-run.
-   Run-to-run equality is tested on one host. Same-seed runs are not yet shown to match across
-   machines: the hash has differed between CI runners with identical images (ruling D9 is open).
-   Until that is resolved, no cross-machine reproducibility claim is made.
+4. **Determinism** (pinned; cross-host evidence pending) — each episode records an
+   action-trajectory hash, and every persisted run records the host it ran on, so a run can be
+   compared with a re-run. The hash depends on torch's thread count and kernel instruction set, so
+   the image pins both, and `sweep` refuses to run off the pin (ruling D9b). The claim is bit-exact
+   reproduction on any x86_64 host with AVX2 under that pin. Run-to-run equality is tested on one
+   host; matching hashes on a second host have not yet been shown.
 
 The harness is the product; the policy is a fixture. It evaluates a small pretrained policy from the
 [LeRobot](https://github.com/huggingface/lerobot) ecosystem on a benchmark task that ecosystem

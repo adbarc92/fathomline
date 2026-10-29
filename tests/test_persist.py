@@ -44,6 +44,7 @@ from fathomline.persist import (
     write_run,
 )
 from fathomline.persist import host as host_module
+from fathomline.persist.host import PINNED_TORCH, pin_mismatches
 from fathomline.report import RESULT_FILENAME as REPORT_RESULT_FILENAME
 from fathomline.report import load_run, report_run_dir
 
@@ -309,6 +310,56 @@ def test_torch_is_not_imported_just_to_record_it(monkeypatch: pytest.MonkeyPatch
     assert "torch" not in sys.modules
 
 
+# --- The determinism pin (D9b) -------------------------------------------------
+
+
+def test_a_host_under_the_determinism_pin_has_no_mismatches() -> None:
+    torch: dict[str, str | int] = {
+        "version": "2.11.0+cpu",
+        "num_threads": 2,
+        "cpu_capability": "AVX2",
+    }
+    assert pin_mismatches(dataclasses.replace(HOST, torch=torch)) == ()
+
+
+@pytest.mark.parametrize(
+    ("torch", "expected"),
+    [
+        ({"num_threads": 1, "cpu_capability": "AVX2"}, ("torch num_threads is 1, pinned 2",)),
+        (
+            {"num_threads": 2, "cpu_capability": "AVX512"},
+            ("torch cpu_capability is 'AVX512', pinned 'AVX2'",),
+        ),
+        # What torch reports when the CPU lacks AVX2, whatever ATEN_CPU_CAPABILITY asks for.
+        (
+            {"num_threads": 2, "cpu_capability": "DEFAULT"},
+            ("torch cpu_capability is 'DEFAULT', pinned 'AVX2'",),
+        ),
+        (
+            {"version": "2.11.0+cpu"},
+            (
+                "torch num_threads is None, pinned 2",
+                "torch cpu_capability is None, pinned 'AVX2'",
+            ),
+        ),
+    ],
+)
+def test_a_host_off_the_pin_names_each_setting_that_differs(
+    torch: dict[str, str | int], expected: tuple[str, ...]
+) -> None:
+    assert pin_mismatches(dataclasses.replace(HOST, torch=torch)) == expected
+
+
+def test_a_run_that_never_imported_torch_has_nothing_to_pin() -> None:
+    assert pin_mismatches(dataclasses.replace(HOST, torch=None)) == ()
+
+
+def test_the_image_sets_the_pin_the_harness_checks() -> None:
+    dockerfile = (REPO / "Dockerfile").read_text(encoding="utf-8")
+    assert f"OMP_NUM_THREADS={PINNED_TORCH['num_threads']}" in dockerfile
+    assert f"ATEN_CPU_CAPABILITY={str(PINNED_TORCH['cpu_capability']).lower()}" in dockerfile
+
+
 # --- The run directory ---------------------------------------------------------
 
 
@@ -572,7 +623,7 @@ def test_every_episode_field_is_compared(change: dict[str, Any]) -> None:
 
 
 def test_host_facts_are_not_compared() -> None:
-    """Whether hosts may differ is D9a's call; a different platform is not a difference."""
+    """Which hosts must agree is D9b's call; a different platform is not a difference."""
     left = _run(_episode(), platform="Linux-x86_64", python_version="3.12.0")
     right = _run(_episode(), platform="Windows-AMD64", python_version="3.12.9")
     assert compare_runs(left, right) == ()

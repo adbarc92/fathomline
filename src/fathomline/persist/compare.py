@@ -2,8 +2,8 @@
 
 Equality is judged on the fixture, the seeds, each episode's metrics and its
 action-trajectory hash (D9), never on video. Host facts are not compared: they
-say where each run happened, and whether two hosts may be expected to agree is
-the open D9a ruling, not this module's call.
+say where each run happened, and which hosts are expected to agree is ruled by
+D9b (and enforced by `sweep`'s pin check), not this module's call.
 
 Floats are compared bit for bit, as the action hash compares them, so 0.0
 differs from -0.0, with one exception: any NaN equals any NaN. Result schema v1

@@ -1,7 +1,7 @@
 ---
 stage: Build
-readiness: "Lanes 0, A, C, D, F merged; lane E spike done, D10 awaiting a ruling; Lane B in review (PR #1); public as of 2026-10-25; no result published yet"
-updated: "2026-10-27"
+readiness: "Lanes 0, A, C, D, F merged; lane E spike done, D10 awaiting a ruling; D9a ruled (D9b); Lane B in review (PR #1); public as of 2026-10-25; no result published yet"
+updated: "2026-10-28"
 name: "Fathomline"
 base_branch: "main"
 test_cmd: "uv run pytest --cov=fathomline --cov-report=term-missing"
@@ -14,13 +14,14 @@ _Canonical, living status. The **State summary** is rewritten in place each sess
 
 ## State summary
 
-**As of 2026-10-27, lanes 0, A, C, D and F are merged. The lane E spike is done: the envelope
+**As of 2026-10-28, lanes 0, A, C, D and F are merged. The lane E spike is done: the envelope
 evidence is in [`SPIKE-envelope.md`](SPIKE-envelope.md), with a recommended D10 set for Alex to
 rule. Lane B (sweep, seed sets, persisted runs) is in review as PR #1 and has been approved by its
 review agent. Its only red check is the `container` job, which fails at the GHCR push
 (`denied: permission_denied: write_package`), an owner-side package permission. G and H are not
-started. Open rulings: D9a (cross-host determinism) and D10 (declared envelope).** The plan and
-the rulings are in [`ROADMAP.md`](ROADMAP.md).
+started. D9a is ruled as D9b: bit-exact reproduction on any x86_64 host with AVX2, under a torch
+thread and kernel pin that the image sets; PR #1 implements it. Open ruling: D10 (declared
+envelope).** The plan and the rulings are in [`ROADMAP.md`](ROADMAP.md).
 
 - **What exists on `main`.**
   - Lane 0: the `Env` / `Policy` / `Monitor` protocols, the owned step loop with an
@@ -41,11 +42,15 @@ the rulings are in [`ROADMAP.md`](ROADMAP.md).
     `result.json` (schema v1), `run.json` (run schema v1: the seed set, host facts, timings) and
     `trajectories/`. The format is documented for lane H in [`run-directory.md`](run-directory.md).
   - `tests/test_determinism.py` asserts run-to-run equality and fails when the seed is removed.
+  - The D9b pin: the image sets `OMP_NUM_THREADS=2` and `ATEN_CPU_CAPABILITY=avx2`, and `sweep`
+    refuses to run (exit 2) when the loaded torch is not under them.
 - **What does not exist yet.** The monitor conditions (G), and `reproduce` with a published
   result (H). `reproduce` exits 2.
 - **History.** Lanes 0, A, C, D and F were built and reviewed as PRs #2–#8 in an earlier private
   repository, now archived. This repository starts from that code as a single commit.
-- **Determinism evidence (for D9a; no ruling made).**
+- **Determinism evidence (behind D9b).** Every hash below was measured with the checkpoint's
+  shipped `n_action_steps=50`. `n_action_steps=10` is adopted (PR #7, not yet merged) and changes
+  every action hash, so these are pre-#7 values, not ones a current run should reproduce.
   - In two fresh containers on one host (Ryzen 7 5800X, AVX2, 2 CPUs), sweeps of the smoke set gave
     the same action hash, `aa18c8f3…`, and the same metrics.
   - That hash is a third value. CI runners gave `409dc548…` (EPYC 9V45, AVX-512) and `f2c89969…`
@@ -69,18 +74,26 @@ the rulings are in [`ROADMAP.md`](ROADMAP.md).
    Then merge PR #1.
 2. Rule D10 from [`SPIKE-envelope.md`](SPIKE-envelope.md) (recommended set at its end); lane G
    follows, one monitor per ruled condition.
-3. Rule D9a, with the evidence above and in PR #1.
+3. Once #7 merges, record the smoke set's action hash under the D9b pin, and show the same hash
+   on a second x86_64 host before a cross-host claim is published.
 4. Lane H: build `reproduce` on the run directory, and publish the first result. Any gate
    threshold must reckon with the fixture's 54% clean baseline.
 
 **Known limitations**
-- No determinism claim across machines until D9a is resolved.
+- The D9b cross-host claim rests on one host so far: no second host has yet run under the pin.
 - Run-to-run equality on the real fixture is shown on one local host. CI cannot run the in-image
   check until the GHCR push works.
 
 ---
 
 ## Session log
+
+### 2026-10-28 — Lane B: main merged in; the D9b pin
+
+- Merged `main` (lane E) into PR #1; `docs/STATUS.md` conflicted and keeps both sides.
+- Alex ruled D9a as D9b. The image now sets `OMP_NUM_THREADS=2` and `ATEN_CPU_CAPABILITY=avx2`,
+  and `sweep` refuses to run off the pin, test-first (the refusal tests were seen red).
+- State delta: D9a is ruled; the action hashes recorded so far are marked as pre-#7 values.
 
 ### 2026-10-27 — Lane B: sweep, seed sets, persisted runs (PR #1)
 
