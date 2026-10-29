@@ -31,6 +31,13 @@ RENAME_MAP = {
     "observation.images.image2": "observation.images.camera2",
 }
 
+#: Actions played from each predicted chunk before the policy looks again. The checkpoint
+#: ships `n_action_steps: 50`, the framework default, so a whole chunk runs blind. That is
+#: SmolVLA's worst setting on LIBERO (paper Table 13: Object 70% at 50, 94% at 10), and
+#: huggingface/lerobot#4614 reports the same gap for this checkpoint. 10 is the setting the
+#: LeRobot LIBERO docs use for pi0.5 and the one #4614 proposes.
+N_ACTION_STEPS = 10
+
 #: Where `warm.py` puts the pinned snapshots inside the image.
 ARTIFACT_ROOT = Path(os.environ.get("FATHOMLINE_ARTIFACTS", "/opt/fathomline"))
 

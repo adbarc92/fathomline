@@ -3,10 +3,12 @@
 D3: fathomline owns the step loop. This module builds the same objects
 `lerobot-eval` builds (`make_env`, `make_policy`, both processor pairs, the
 `rename_map`) and exposes one step at a time; `lerobot_eval.rollout` is never
-called. The split follows what each half owns: the environment's processors
-run in `LeRobotEnv`, the policy's in `LeRobotPolicy`, so an observation crossing
-the seam is the LeRobot-format batch any LeRobot policy reads, and an action is
-the plain float tuple the core hashes.
+called. One setting differs from a default `lerobot-eval` run: the policy replans
+every `pins.N_ACTION_STEPS` actions, not once per 50-action chunk. The split
+follows what each half owns: the environment's processors run in `LeRobotEnv`,
+the policy's in `LeRobotPolicy`, so an observation crossing the seam is the
+LeRobot-format batch any LeRobot policy reads, and an action is the plain float
+tuple the core hashes.
 
 Linux only, and only in the container: it needs `--extra lerobot` and the
 snapshots `warm.py` places at build time. It is omitted from the unit job's
@@ -171,6 +173,7 @@ def load_fixture() -> tuple[LeRobotEnv, LeRobotPolicy, int]:
             "--use_amp=false",
             # The pinned local snapshot instead of the repo id the checkpoint names.
             f"--vlm_model_name={vlm_dir}",
+            f"--n_action_steps={pins.N_ACTION_STEPS}",
         ],
     )
     policy_cfg.pretrained_path = policy_dir
@@ -212,7 +215,10 @@ def load_fixture() -> tuple[LeRobotEnv, LeRobotPolicy, int]:
         postprocessor,
         ref=ArtifactRef(
             name=pins.POLICY.repo_id,
-            revision=f"{pins.POLICY.revision} {pins.VLM.repo_id}@{pins.VLM.revision}",
+            revision=(
+                f"{pins.POLICY.revision} {pins.VLM.repo_id}@{pins.VLM.revision} "
+                f"n_action_steps={pins.N_ACTION_STEPS}"
+            ),
         ),
     )
     return env, agent, env.max_steps
