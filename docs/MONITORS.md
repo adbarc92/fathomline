@@ -9,6 +9,7 @@ added here as their monitors land._
 | D10 | Condition | Monitor | Status |
 |---|---|---|---|
 | 2 | Action out of bounds | `ActionBound`: arm dimensions 0–5 within ±1.1; gripper excluded | built |
+| 4 | Instruction outside the declared set | `InstructionSet`: exact match against the task's own instruction | built |
 | 5 | Unseen init | none: held by construction (see `envelope.py`) | declared |
 
 ## Action out of bounds
@@ -27,6 +28,21 @@ below.
 the spike, lighting, noise, camera, instruction and init faults all left the actions looking
 normal. A subtle metadata swap could also stay inside ±1.1; D10's provenance condition is the
 check meant for that.
+
+## Instruction outside the declared set
+
+**What it checks.** Every step, the instruction in the observation (`task`) must be, exactly,
+one of the declared instructions: for the fixture, `libero_object` task 0's own, "pick up the
+alphabet soup and place it in the basket". There is no normalization of case, whitespace or
+punctuation. A step with no instruction, or one that is not text, stops the episode rather
+than passing.
+
+**Paraphrases are flagged by design.** In the spike, task 1's instruction on task 0's scene gave
+0/30, and a paraphrase gave 18/30, no measurable harm. Both are outside what the fixture was
+evaluated on, and the envelope claims only what was evaluated.
+
+**What it misses.** It reads the instruction the env hands the policy. A fault after that point,
+in tokenization for example, is not seen here.
 
 ## Real-episode check
 
@@ -73,6 +89,28 @@ What these numbers can and cannot show:
 - **Action hashes are compared on the same CPU** as the spike, because the hash is known to differ
   across CPUs (D9a). Both ran on the spike's host, an AMD Ryzen 7 5800X under Docker Desktop.
   Rows from runs after this check was written also record the CPU model.
+
+## Fault runs under the suite
+
+These runs cover the monitors added after the action bound. The JSONL is in
+`docs/monitor-checks/results-suite/`. Each row records which monitor flagged it, and the step
+where it first did. Each condition ran 5 episodes on the spike's seeds 1000–1004, using the
+spike's own injection. Every flag here comes from a first-steps check, so these episodes were cut
+to 20 steps (`--max-steps 20`). Cut short, their action hashes cannot be compared with the
+spike's. The rows were made with the suite and check script of PR #6 (provenance, action bound
+and instruction), which records the first flag step per monitor; this file's check script is the
+later one, so build from #6 or later to regenerate them. "Other monitors" covers those 20 steps;
+in the spike's full-length instruction runs the arm never passed 1.04, under the 1.1 bound.
+
+| Condition | Flagged | Flagged by | First flag step | Other monitors |
+|---|---|---|---|---|
+| `instruction_other` (task 1's instruction) | **5/5** | `instruction-set` | 0 on every episode | none flagged |
+| `instruction_paraphrase` | **5/5** | `instruction-set` | 0 on every episode | none flagged |
+
+The real observation carries the instruction as a one-element list under `task`, and the
+monitor reads it there. The paraphrase is flagged by design (D10). In the spike it gave 18/30
+against 15/30 clean on the same starts, so it does no measurable harm. It is flagged because it
+is outside what was evaluated.
 
 ## Reproduce the real-episode check
 
