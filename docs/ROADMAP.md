@@ -25,6 +25,7 @@ Ruled decisions are not re-litigated. An amendment is a new dated row, never an 
 | # | Decision | Ruling | Date |
 |---|---|---|---|
 | D1 | Fixture | **SmolVLA (`lerobot/smolvla_libero` @ `31d453f`) on LIBERO `libero_object` task 0.** Automatic fallback to SmolVLA + Meta-World if the image does not fit the CI runner | 2026-09-29 |
+| D1a | Fixture (amends D1) | **The fixture replans every 10 actions**, overriding the checkpoint's shipped `n_action_steps: 50` (#7). Evidence: `docs/SPIKE-baseline.md` (#10). Clean rate at this setting: 47/50 on seeds 1000–1049 (#11) | 2026-10-28 |
 | D2 | Runtime | **Python 3.12, `lerobot[smolvla,libero,evaluation]==0.6.1` pinned exactly**, CPU torch index, every Hub artifact pinned by SHA | 2026-09-29 |
 | D3 | Architecture | **Fathomline owns the step loop** behind small `Env` / `Policy` protocols; LeRobot sits behind one adapter. This is the seam for retargeting to another simulator stack | 2026-09-29 |
 | D4 | Nov 9 scope | **Aim for full G0.1; G0.1-early is the hard floor** | 2026-09-29 |
@@ -42,6 +43,7 @@ Ruled decisions are not re-litigated. An amendment is a new dated row, never an 
 | D12 | Report format | Versioned JSON is canonical; Markdown is rendered from it | default 2026-09-30 |
 | D13 | Distribution | The published image is `ghcr.io/adbarc92/fathomline:<tag>`; the reproduction command is `docker run … reproduce <result-id>` | default 2026-09-30 |
 | D14 | First published result's gate | **A deliberate FAIL at a meaningful threshold** (0.5 proposed; the number is set after the baseline check). The fixture's clean rate (27/50, lower bound 0.39) cannot clear it, and the published result says so. A threshold chosen to make the fixture pass is not used | 2026-10-27 |
+| D14a | First published result's gate (sets D14's number) | **Threshold 0.9, a deliberate FAIL.** After D1a the fixture scores 47/50 (95% Clopper-Pearson lower bound 0.835), so 0.5 would pass. At 0.9 the gate fails at every count up to 49/50, which leaves margin if a rebuilt image scores slightly differently. The threshold was set with this outcome known, because the published sweep reuses these seeds; the published result says so | 2026-10-28 |
 
 ## Lanes
 
