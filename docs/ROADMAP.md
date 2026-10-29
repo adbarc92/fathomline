@@ -71,6 +71,31 @@ him for more than a ruling.
 | Then | G; H begins; publish the first result | Merges |
 | To 2026-11-09 | Integration and hardening; G0.1-early, full G0.1 if the monitors are green | Merges |
 
+## Follow-ups
+
+Known gaps and small fixes that are not yet scheduled.
+
+- **CLI runs are unmonitored.** `fathomline eval` does not attach `fixture_monitors()` (lane G,
+  PR #4) yet, and `sweep` (PR #1) does not either. Until `eval` (`cli.py`) and `sweep`
+  (`persist/command.py`) attach them, CLI runs and any result published from them carry no
+  monitor flags, so the "a flagged run never passes" guarantee does not reach them. Blocks lane
+  H's first published result. Done when `eval` and `sweep` run under the fixture's monitors, and
+  a flagged CLI run is reported as flagged and fails the gate.
+- **Lane G small follow-ups** (code in PRs #4, #6 and #8).
+  - The monitor check script's frame recorder (`docs/monitor-checks/check_monitors.py`) repeats
+    the formula of the adapter's `frame_statistics` instead of calling it, so the two can drift
+    apart. The recorder covers both cameras while `frame_statistics` reads only the third-person
+    one, so sharing the code needs a camera parameter, or the recorder calls it for that camera
+    only.
+  - The container check's frame-statistics tolerance (0.01, in `check_loaded_pipeline.py`) has
+    never run on a CI runner, because the `container` job has not yet got past the GHCR push.
+  - `FrameBand` accepts a band whose low equals its high, which passes only one exact value.
+    Refusing it like an inverted band is proposed.
+  - Done when the recorder takes its third-person statistics from `frame_statistics`; the
+    container job has run `check_loaded_pipeline.py` green on a CI runner, with the tolerance
+    revisited if the CI value needs it; and the `low == high` case is decided, with a test seen
+    failing first if it is refused.
+
 ## Known risks
 
 - **The ~6.6 GB image is tight on the 14 GB runner disk.** CI pins `ubuntu-24.04` and frees disk
