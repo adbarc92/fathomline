@@ -50,8 +50,14 @@ def fake_fixture(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delitem(sys.modules, "torch", raising=False)
 
 
-def _torch(monkeypatch: pytest.MonkeyPatch, *, num_threads: int, cpu_capability: str) -> None:
-    """Stand in for the torch the real fixture imports, with these settings."""
+def _fixture_importing_torch(
+    monkeypatch: pytest.MonkeyPatch, *, num_threads: int, cpu_capability: str
+) -> None:
+    """Load the fakes the way the real fixture loads: importing torch, with these settings.
+
+    torch appears only once the fixture loads, as it does for real, so a pin check
+    made before the load would see no torch and these tests would catch it.
+    """
     torch = types.SimpleNamespace(
         __version__="2.11.0+cpu",
         get_num_threads=lambda: num_threads,
@@ -60,7 +66,12 @@ def _torch(monkeypatch: pytest.MonkeyPatch, *, num_threads: int, cpu_capability:
             cpu=types.SimpleNamespace(get_cpu_capability=lambda: cpu_capability)
         ),
     )
-    monkeypatch.setitem(sys.modules, "torch", torch)
+
+    def load() -> tuple[Env, Policy, int]:
+        monkeypatch.setitem(sys.modules, "torch", torch)
+        return _fake_fixture()
+
+    monkeypatch.setattr(cli, "_load_fixture", load)
 
 
 @pytest.mark.usefixtures("fake_fixture")
@@ -142,7 +153,7 @@ def test_without_argv_the_process_command_line_is_recorded(
 def test_a_sweep_under_the_determinism_pin_runs_and_records_it(
     tmp_path: Path, lock: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _torch(monkeypatch, num_threads=2, cpu_capability="AVX2")
+    _fixture_importing_torch(monkeypatch, num_threads=2, cpu_capability="AVX2")
     run_dir = tmp_path / "run"
     assert (
         main(["sweep", "--seed-set", "pair", "--lock", str(lock), "--run-dir", str(run_dir)]) == 0
@@ -170,7 +181,7 @@ def test_a_sweep_off_the_determinism_pin_runs_nothing(
         raise AssertionError("a sweep ran off the determinism pin")
 
     monkeypatch.setattr(sweep_command, "run_sweep", must_not_run)
-    _torch(monkeypatch, num_threads=num_threads, cpu_capability=cpu_capability)
+    _fixture_importing_torch(monkeypatch, num_threads=num_threads, cpu_capability=cpu_capability)
     run_dir = tmp_path / "run"
     argv = ["sweep", "--seed-set", "pair", "--lock", str(lock), "--run-dir", str(run_dir)]
     assert main(argv) == EXIT_NOT_RUN

@@ -68,12 +68,14 @@ parser reading `result.json` must accept them. (A candidate for the next result-
 
 - `seed_set.digest` is `seed_digest(seeds)`, the SHA-256 of the seeds in order, as recorded in
   `tests.lock`. A re-run can check it ran the same declaration.
-- `host` holds what the determinism claim (D9b) is scoped by: the CPU model and SIMD flags (from `/proc/cpuinfo`; empty off Linux), the CPUs the
-  process could use (its affinity mask, i.e. a container's `--cpuset-cpus`), the thread and
-  kernel-dispatch environment variables that were set, and torch's thread counts and the
-  instruction set its kernels dispatched to (`null` if the fixture did not import torch). Only
-  the pin is acted on: `sweep` refuses to run unless torch's `num_threads` and `cpu_capability`
-  are the pinned ones (`fathomline.persist.PINNED_TORCH`), so a persisted run is always under it.
+- `host` holds what the determinism claim (D9b) is scoped by: the CPU model and SIMD flags (from
+  `/proc/cpuinfo`; empty off Linux), the CPUs the process could use (its affinity mask, i.e. a
+  container's `--cpuset-cpus`), the thread and kernel-dispatch environment variables that were
+  set, and torch's thread counts and the instruction set its kernels dispatched to (`null` if the
+  fixture did not import torch). Only the pin is acted on: `sweep` refuses to run unless torch's
+  `num_threads` and `cpu_capability` are the pinned ones (`fathomline.persist.PINNED_TORCH`), so
+  every persisted run of the real fixture is under it. A fake run, which never imports torch, is
+  not checked.
 
 ## `trajectories/<seed>.json`
 

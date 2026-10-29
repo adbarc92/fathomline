@@ -26,6 +26,7 @@ file — that rule is the point of the project, so it applies to the project's o
 | The report is regenerated from a saved result, with no re-run, and surfaces flags | `uv run fathomline report tests/fixtures/report/flagged-run` → a Markdown report headed **FLAGGED** |
 | `sweep` runs a declared seed set in the image and persists a run directory that `report` reads with no re-run | `docker run --rm --network none -v "$PWD/runs:/app/runs" fathomline sweep --seed-set smoke --run-dir runs/smoke && uv run fathomline report runs/smoke` |
 | Two sweeps of one seed set are equal on per-episode metrics and the action hash, and the check fails when the seed is removed (on the fake fixture, on one host) | `uv run pytest tests/test_determinism.py -v` |
+| `sweep` refuses to run off the determinism pin (ruling D9b): wrong torch thread count or kernel instruction set → exit **2**, nothing run (on the fake fixture, with a stand-in torch) | `uv run pytest tests/test_sweep_cli.py -k pin -v` |
 | Unbuilt commands admit it | `uv run fathomline reproduce; echo $?` → prints the reason, exits **2** |
 
 ## What it does, and what it will do
@@ -45,9 +46,10 @@ Four capabilities. Each is a claim this README only makes once a command proves 
 4. **Determinism** (pinned; cross-host evidence pending) — each episode records an
    action-trajectory hash, and every persisted run records the host it ran on, so a run can be
    compared with a re-run. The hash depends on torch's thread count and kernel instruction set, so
-   the image pins both, and `sweep` refuses to run off the pin (ruling D9b). The claim is bit-exact
-   reproduction on any x86_64 host with AVX2 under that pin. Run-to-run equality is tested on one
-   host; matching hashes on a second host have not yet been shown.
+   the image pins both, and `sweep` refuses to run off the pin (ruling D9b). D9b scopes the
+   cross-host claim to bit-exact reproduction on any x86_64 host with AVX2 under that pin, but
+   the claim is not made yet: no second host has shown a matching hash. Run-to-run equality is
+   tested on one host.
 
 The harness is the product; the policy is a fixture. It evaluates a small pretrained policy from the
 [LeRobot](https://github.com/huggingface/lerobot) ecosystem on a benchmark task that ecosystem

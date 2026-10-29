@@ -10,6 +10,7 @@ import dataclasses
 import json
 import math
 import os
+import re
 import shutil
 import struct
 import sys
@@ -356,8 +357,9 @@ def test_a_run_that_never_imported_torch_has_nothing_to_pin() -> None:
 
 def test_the_image_sets_the_pin_the_harness_checks() -> None:
     dockerfile = (REPO / "Dockerfile").read_text(encoding="utf-8")
-    assert f"OMP_NUM_THREADS={PINNED_TORCH['num_threads']}" in dockerfile
-    assert f"ATEN_CPU_CAPABILITY={str(PINNED_TORCH['cpu_capability']).lower()}" in dockerfile
+    threads, capability = PINNED_TORCH["num_threads"], str(PINNED_TORCH["cpu_capability"]).lower()
+    assert re.search(rf"\bOMP_NUM_THREADS={threads}\b", dockerfile)
+    assert re.search(rf"\bATEN_CPU_CAPABILITY={capability}\b", dockerfile)
 
 
 # --- The run directory ---------------------------------------------------------

@@ -1,6 +1,6 @@
 ---
 stage: Build
-readiness: "Lanes 0, A, C, D, F merged; lane E spike done, D10 awaiting a ruling; D9a ruled (D9b); Lane B in review (PR #1); public as of 2026-10-25; no result published yet"
+readiness: "Lanes 0, A, C, D, F merged; lane E spike done; D10, D14 and D9a (as D9b) ruled; Lane B in review (PR #1); public as of 2026-10-25; no result published yet"
 updated: "2026-10-28"
 name: "Fathomline"
 base_branch: "main"
@@ -15,13 +15,12 @@ _Canonical, living status. The **State summary** is rewritten in place each sess
 ## State summary
 
 **As of 2026-10-28, lanes 0, A, C, D and F are merged. The lane E spike is done: the envelope
-evidence is in [`SPIKE-envelope.md`](SPIKE-envelope.md), with a recommended D10 set for Alex to
-rule. Lane B (sweep, seed sets, persisted runs) is in review as PR #1 and has been approved by its
+evidence is in [`SPIKE-envelope.md`](SPIKE-envelope.md), and D10 (the declared envelope) and D14
+(the first published result's gate) are ruled from it (PR #3). Lane B (sweep, seed sets, persisted runs) is in review as PR #1 and has been approved by its
 review agent. Its only red check is the `container` job, which fails at the GHCR push
 (`denied: permission_denied: write_package`), an owner-side package permission. G and H are not
 started. D9a is ruled as D9b: bit-exact reproduction on any x86_64 host with AVX2, under a torch
-thread and kernel pin that the image sets; PR #1 implements it. Open ruling: D10 (declared
-envelope).** The plan and the rulings are in [`ROADMAP.md`](ROADMAP.md).
+thread and kernel pin that the image sets; PR #1 implements it.** The plan and the rulings are in [`ROADMAP.md`](ROADMAP.md).
 
 - **What exists on `main`.**
   - Lane 0: the `Env` / `Policy` / `Monitor` protocols, the owned step loop with an
@@ -72,8 +71,7 @@ envelope).** The plan and the rulings are in [`ROADMAP.md`](ROADMAP.md).
 **Next steps** — each points into [`ROADMAP.md`](ROADMAP.md)
 1. Owner: fix the GHCR package permission, so the `container` job runs the in-image sweep check.
    Then merge PR #1.
-2. Rule D10 from [`SPIKE-envelope.md`](SPIKE-envelope.md) (recommended set at its end); lane G
-   follows, one monitor per ruled condition.
+2. Lane G: one monitor per ruled D10 condition.
 3. Once #7 merges, record the smoke set's action hash under the D9b pin, and show the same hash
    on a second x86_64 host before a cross-host claim is published.
 4. Lane H: build `reproduce` on the run directory, and publish the first result. Any gate
@@ -90,7 +88,8 @@ envelope).** The plan and the rulings are in [`ROADMAP.md`](ROADMAP.md).
 
 ### 2026-10-28 — Lane B: main merged in; the D9b pin
 
-- Merged `main` (lane E) into PR #1; `docs/STATUS.md` conflicted and keeps both sides.
+- Merged `main` into PR #1 twice: lane E (`docs/STATUS.md` conflicted) and the D10/D14 rulings
+  (`docs/ROADMAP.md` conflicted). Both sides were kept each time.
 - Alex ruled D9a as D9b. The image now sets `OMP_NUM_THREADS=2` and `ATEN_CPU_CAPABILITY=avx2`,
   and `sweep` refuses to run off the pin, test-first (the refusal tests were seen red).
 - State delta: D9a is ruled; the action hashes recorded so far are marked as pre-#7 values.
