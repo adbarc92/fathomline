@@ -37,10 +37,11 @@ Ruled decisions are not re-litigated. An amendment is a new dated row, never an 
 | D9 | Determinism assertion | Assert on per-episode metrics and an action-trajectory hash, **never on video** (spike finding 6). The claim is scoped to the pinned container on x86_64 CPU | default 2026-09-30 — Alex may amend |
 | D9a | Determinism assertion (reopens D9) | **Open.** The action-trajectory hash differed between CI runners running identical images (`409dc548…` vs `f2c89969…`), so the cross-host scope of the claim is unresolved. No cross-machine determinism claim until this is ruled | 2026-10-25 |
 | D9b | Determinism assertion (rules D9a) | **Bit-exact reproduction on any x86_64 host with AVX2, under a pin the image sets:** a fixed torch intra-op thread count (`OMP_NUM_THREADS=2`) and `ATEN_CPU_CAPABILITY=avx2`. `sweep` refuses to run when torch is not under the pin, and every run records its host facts in `run.json`. Evidence: on one host, one thread versus several, and the ATen instruction set, each changed the action hash; 2, 4 and 8 threads did not | 2026-10-28 |
-| D10 | Declared envelope (U2 conditions) | **Open.** Candidates: provenance mismatch, action out of bounds, observation shift, unseen instruction/init. Ruled after the evidence spike (lane E) | — |
+| D10 | Declared envelope (U2 conditions) | **Lane E's recommended set** (`docs/SPIKE-envelope.md`). (1) **Provenance mismatch:** checks what the *loaded* pipeline uses, not only on-disk digests. (2) **Action out of bounds:** arm dimensions only, **±1.1**, fixed now, before lane G measures it (the margin was picked after seeing the spike data); the gripper is excluded. (3) **Observation shift:** a frame brightness/noise band, calibrated by lane G on held-out episodes; it is known to miss a camera swap. (4) **Instruction outside the declared set:** exact match; harmless paraphrases are flagged by design. (5) **Unseen init:** declared and enforced by construction (the harness picks the init state); no runtime monitor yet. Lane G builds (2) first. If the baseline check changes the fixture's behaviour, the ±1.1 margin and the band are re-checked before they ship | 2026-10-27 |
 | D11 | Coverage for the Linux-only adapter | The unit job's 100% gate covers the core; the adapter is omitted there **with a stated reason** and covered by the container integration job | default 2026-09-30 — Alex may amend |
 | D12 | Report format | Versioned JSON is canonical; Markdown is rendered from it | default 2026-09-30 |
 | D13 | Distribution | The published image is `ghcr.io/adbarc92/fathomline:<tag>`; the reproduction command is `docker run … reproduce <result-id>` | default 2026-09-30 |
+| D14 | First published result's gate | **A deliberate FAIL at a meaningful threshold** (0.5 proposed; the number is set after the baseline check). The fixture's clean rate (27/50, lower bound 0.39) cannot clear it, and the published result says so. A threshold chosen to make the fixture pass is not used | 2026-10-27 |
 
 ## Lanes
 
@@ -67,8 +68,8 @@ him for more than a ruling.
 | Step | Work | Alex |
 |---|---|---|
 | Done | Lanes 0, A, C, D, F; the E spike; B built and approved (PR #1; merges once the GHCR push permission is fixed) | — |
-| Next | G, one monitor per ruled D10 condition | **Rule D10 from lane E's data** |
-| Then | G; H begins; publish the first result | Merges |
+| Next | G, one monitor per ruled D10 condition | Merges |
+| Then | H begins; publish the first result | Merges |
 | To 2026-11-09 | Integration and hardening; G0.1-early, full G0.1 if the monitors are green | Merges |
 
 ## Known risks
