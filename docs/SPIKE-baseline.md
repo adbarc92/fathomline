@@ -158,7 +158,8 @@ docker run --rm --cpuset-cpus 4-7 --memory 7g \
   --entrypoint bash fathomline /spike/run_stock_eval.sh /out/stock-n10 \
   --eval.batch_size=1 --eval.use_async_envs=false --eval.n_episodes=10 --policy.n_action_steps=10
 # The harness at 10: lane E's baseline condition, with PR #7's source over the image's,
-# as four containers of five seeds (run them two at a time on a small host).
+# as four containers of five seeds. The loop runs them one after another; the spike ran
+# them side by side, four CPUs each (--cpuset-cpus).
 git fetch origin pull/7/head && git worktree add ../fix-n10 dd0cf1e
 for part in a:1000 b:1005 c:1010 d:1015; do
   docker run --rm --network none --memory 7g \
