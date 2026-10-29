@@ -13,6 +13,8 @@
 # The defaults are the fixture's: `libero_object` task 0, 50 episodes from seed 1000. With
 # `--eval.batch_size=B`, LeRobot gives sub-env j the init states j, j+B, j+2B, ..., so seed 1000+i
 # meets init state i, as it does in the harness. Extra flags are appended and override the defaults.
+# The spike's own runs overrode them (one sync env, 20 or 10 episodes, 4 CPUs each): see the
+# Reproduce block in docs/SPIKE-baseline.md.
 set -euo pipefail
 
 out=${1:?usage: run_stock_eval.sh OUT_DIR [lerobot-eval flag ...]}

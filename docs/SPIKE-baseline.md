@@ -7,15 +7,15 @@ to is a separate PR (#7); Alex has ruled to adopt it._
 ## TL;DR
 
 - **Not a harness bug. Stock `lerobot-eval` gets the same rate.** With no Fathomline code in the
-  path, on seeds 1000–1019, it got 14/20 against the harness's 14/20, and the two agree on 18 of
-  the 20 episodes (one lost, one gained; McNemar p = 1).
+  path, on seeds 1000–1019, it got 14/20 against the harness's 14/20. The two disagree on 2 of
+  the 20 episodes, one each way: no detectable difference, though 20 pairs bound it only loosely.
 - **The cause is one setting in the checkpoint's config.** `lerobot/smolvla_libero` @ `31d453f`
   ships `n_action_steps: 50`, so the policy plays a whole 50-action chunk before it looks at the
   scene again. Both the harness and stock `lerobot-eval` use it, because both read the config.
-- **That setting is SmolVLA's worst on LIBERO, by its own paper.** Table 13 gives LIBERO-Object
-  70% at 50 actions per observation, and 94% at 1 or 10. The 96% headline (Table 2) replans after
-  every action. LeRobot's tracker reports the same gap for this checkpoint (huggingface/lerobot#4614,
-  open).
+- **That setting is the worst of the four the SmolVLA paper tests on LIBERO.** Table 13 gives
+  LIBERO-Object 70% at 50 actions per observation, and 94% at 1 or 10. The 96% headline (Table 2)
+  replans after every action. LeRobot's tracker reports the same gap for this checkpoint
+  (huggingface/lerobot#4614, open).
 - **At `n_action_steps=10`, the fixture is a ~95% policy.** Harness: 19/20 on seeds 1000–1019
   (95% CI [0.75, 1.00]). Stock `lerobot-eval`: 10/10 on seeds 1000–1009 ([0.69, 1.00]), level
   with the harness on every one of those ten.
@@ -62,14 +62,18 @@ takes the image only for its locked Python stack and the LIBERO meshes. It drops
 checkpoint, the VLM and the tokenizer itself. The flags are the ones LeRobot's own CI passes for
 this checkpoint (`.github/workflows/benchmark_tests.yml`: the camera mapping and one empty
 camera), plus CPU. So the stock runs share nothing with the harness but the installed packages
-and the meshes, which are pinned by digest to the Hub's current revision. Lane E's earlier
+and the LIBERO meshes baked into the image (pinned by digest). Lane E's earlier
 cross-check (6/10 against 7/10) shared the loaded env and policy objects too.
 
 **Episode counts.** The host was shared with another lane's four containers, so an episode took
-10 to 50 minutes. The arms were cut before they started: `stock-n50` and `harness-n10` to 20
+10 to 55 minutes. The arms were cut before they started: `stock-n50` and `harness-n10` to 20
 episodes (seeds 1000–1019), `stock-n10` to 10 (seeds 1000–1009). `lerobot-eval` cannot start at
 an init state other than 0 in a single env, so it could not be split across containers the way
 the harness can.
+
+Lane E's `run_envelope.py` does not record the policy's provenance, so the `harness-n10` rows
+carry no `n_action_steps` field. They ran with PR #7's source mounted over the image's (its
+override, `3618421`, or later).
 
 **Statistics.** Each rate carries its two-sided 95% Clopper-Pearson interval (D6a). Runs on the
 same seeds are paired and tested with an exact McNemar test.
@@ -90,32 +94,36 @@ From `summarize.py`, first label `harness-n50`:
 Paired at the new setting (first label `harness-n10`): `stock-n10` scores 10/10 against the
 harness's 10/10 on seeds 1000–1009, with no discordant episode.
 
-- **The two loops agree at both settings.** At 50 they disagree on two of twenty seeds, in
-  opposite directions (1015: stock succeeds, the harness fails; 1017: the reverse). At 10 they
-  agree on all ten shared seeds.
+- **No difference between the loops is detectable at either setting.** At 50 they disagree on
+  two of twenty seeds, in opposite directions (1015: stock succeeds, the harness fails; 1017: the
+  reverse). At 10 they agree on all ten shared seeds. Why 1015 and 1017 differ was not
+  investigated; the two loops need not draw the same random numbers for the policy.
 - **The 70% vs 54% is the seed range, not the loop.** The harness's own first 20 seeds are 14/20
-  too; seeds 1020–1049 bring its 50-seed rate down to 27/50.
+  too; seeds 1020–1049 bring its 50-seed rate down to 27/50 (13/30 on those; 14/20 vs 13/30 is
+  within sampling noise, Fisher p = 0.09).
 - **At 10, every failure the harness had at 50 on these seeds becomes a success.** Seeds 1003,
   1005, 1009, 1013, 1015 and 1019 fail at 50 and succeed at 10. One seed goes the other way:
   1016 succeeds at 50 and times out at 10 (280 steps). The paired test on 20 seeds is not
   significant (p = 0.12).
 - **A successful episode at 10 takes 130–167 steps** (median 140), against 280 for a failure.
 - **Wall-clock, as measured here, is not a benchmark.** A harness episode at 10 took 581–3209 s
-  on four shared CPUs, and ~590 s once the host was quiet. Stock `lerobot-eval` averaged 582 s
-  per episode at 50 and 1593 s at 10, on a busier host.
+  on four CPUs of a shared host, and ~590 s once the host was quiet. The policy runs a forward
+  pass every 10 steps instead of every 50, so an episode at 10 makes about 5× the policy calls.
 
 ## Conclusion
 
 The fixture's 54% is what this checkpoint does with its shipped config, not something the harness
 adds: stock `lerobot-eval`, sharing nothing with the harness but the installed packages and the
-meshes, scores the same on the same seeds, at the shipped setting and at 10. The gap to the
-published numbers is the replan horizon. Replanning every 10 actions moves the fixture from about
-half to about 95% on these seeds, in line with the paper's ablation (70% → 94% on LIBERO-Object)
+meshes, scores the same on the same seeds (within what 20 and 10 pairs can detect), at the
+shipped setting and at 10. Most of the gap to the published numbers is the replan horizon: on task
+0 at 10 the fixture matches them. Replanning every 10 actions moves the harness from 27/50 (54%)
+to 19/20 (95%), Fisher exact p < 0.001; on the same 20 seeds, from 14/20 to 19/20 (6 gained,
+1 lost; paired p = 0.12). That is in line with the paper's ablation (70% → 94% on LIBERO-Object)
 and the third-party CPU number for this checkpoint (task 0: 10/10 at 10). The fix is PR #7. Its
 consequences for D1, D9a, D10 and D14 are listed there.
 
-Twenty and ten episodes are small samples. The 95% intervals at 10 start at 0.75 and 0.69, so they
-rule out the 54% baseline but cannot tell 90% from 99%.
+Twenty and ten episodes are small samples. The 95% intervals at 10 start at 0.75 and 0.69, so
+they cannot tell 90% from 99%.
 
 ## Not tested
 
@@ -124,7 +132,7 @@ rule out the 54% baseline but cannot tell 90% from 99%.
   which suggests the hardware is not the gap.
 - **Other libero_object tasks.** Not re-run here; #4614's per-task table covers tasks 0–9, and
   task 0 is among the easiest there (10/10 at 10).
-- **`n_action_steps=1`**, the paper's headline setting. About 5× the inference cost of 10 on CPU.
+- **`n_action_steps=1`**, the paper's headline setting. Ten times the policy calls of 10.
   The paper and a CUDA sweep in #4614 put it within a few points of 10.
 - **256×256 rendering**, to match the training images. LeRobot's default is 360.
 - **The checkpoint's current Hub revision** (`a24f1f3`, 2026-10-12). It only rewrites the
@@ -149,20 +157,28 @@ docker run --rm --cpuset-cpus 4-7 --memory 7g \
   -v "$PWD/docs/spike-baseline:/spike:ro" -v "$PWD/runs/baseline:/out" \
   --entrypoint bash fathomline /spike/run_stock_eval.sh /out/stock-n10 \
   --eval.batch_size=1 --eval.use_async_envs=false --eval.n_episodes=10 --policy.n_action_steps=10
-# The harness at 10: lane E's baseline condition, with PR #7's source over the image's.
-# Seeds 1000-1019 ran as four containers of five (--first-seed 1000, 1005, 1010, 1015).
-git worktree add ../fix-n10 fix/fixture-n-action-steps
-docker run --rm --network none --cpuset-cpus 8-11 --memory 7g \
-  -v "$PWD/docs/spike-envelope:/spike:ro" -v "$PWD/../fix-n10/src:/app/src:ro" \
-  -v "$PWD/runs/baseline:/out" --entrypoint python fathomline \
-  /spike/run_envelope.py --condition baseline --first-seed 1000 --episodes 5 --out /out/harness-n10-a
+# The harness at 10: lane E's baseline condition, with PR #7's source over the image's,
+# as four containers of five seeds (run them two at a time on a small host).
+git fetch origin pull/7/head && git worktree add ../fix-n10 dd0cf1e
+for part in a:1000 b:1005 c:1010 d:1015; do
+  docker run --rm --network none --memory 7g \
+    -v "$PWD/docs/spike-envelope:/spike:ro" -v "$PWD/../fix-n10/src:/app/src:ro" \
+    -v "$PWD/runs/baseline:/out" --entrypoint python fathomline \
+    /spike/run_envelope.py --condition baseline --first-seed "${part#*:}" --episodes 5 \
+    --out "/out/harness-n10-${part%%:*}"
+done
 uv run python docs/spike-baseline/summarize.py \
   harness-n50=docs/spike-envelope/results/baseline.jsonl \
   stock-n50=runs/baseline/stock-n50/eval_info.json \
   harness-n10=runs/baseline/harness-n10-a/baseline.jsonl \
+  harness-n10=runs/baseline/harness-n10-b/baseline.jsonl \
+  harness-n10=runs/baseline/harness-n10-c/baseline.jsonl \
+  harness-n10=runs/baseline/harness-n10-d/baseline.jsonl \
   stock-n10=runs/baseline/stock-n10/eval_info.json
 ```
 
-Repeat a label to merge a split run (`harness-n10=.../harness-n10-b/baseline.jsonl`, and so on).
-The committed [`results/`](spike-baseline/results/) hold the four `harness-n10` files concatenated
-(`harness-n10.jsonl`) and each stock run's `eval_info.json`; the videos are not committed.
+The image is built from main before PR #7. Once #7 merges, main's image already replans every 10
+actions, so the `harness-n10` runs need no mounted source, and `harness-n50` needs the image built
+from the commit before the merge. The committed [`results/`](spike-baseline/results/) hold the
+four `harness-n10` files concatenated (`harness-n10.jsonl`) and each stock run's
+`eval_info.json`; the videos are not committed.
