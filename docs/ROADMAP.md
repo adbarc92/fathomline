@@ -36,6 +36,7 @@ Ruled decisions are not re-litigated. An amendment is a new dated row, never an 
 | D8 | Automation | **Agents build each lane in a worktree and open a PR; a separate review agent grades it (writer ≠ grader); CI must be green; Alex merges** | 2026-09-29 |
 | D9 | Determinism assertion | Assert on per-episode metrics and an action-trajectory hash, **never on video** (spike finding 6). The claim is scoped to the pinned container on x86_64 CPU | default 2026-09-30 — Alex may amend |
 | D9a | Determinism assertion (reopens D9) | **Open.** The action-trajectory hash differed between CI runners running identical images (`409dc548…` vs `f2c89969…`), so the cross-host scope of the claim is unresolved. No cross-machine determinism claim until this is ruled | 2026-10-25 |
+| D9b | Determinism assertion (rules D9a) | **Bit-exact reproduction on any x86_64 host with AVX2, under a pin the image sets:** a fixed torch intra-op thread count (`OMP_NUM_THREADS=2`) and `ATEN_CPU_CAPABILITY=avx2`. `sweep` refuses to run when torch is not under the pin, and every run records its host facts in `run.json`. Evidence: on one host, one thread versus several, and the ATen instruction set, each changed the action hash; 2, 4 and 8 threads did not | 2026-10-28 |
 | D10 | Declared envelope (U2 conditions) | **Lane E's recommended set** (`docs/SPIKE-envelope.md`). (1) **Provenance mismatch:** checks what the *loaded* pipeline uses, not only on-disk digests. (2) **Action out of bounds:** arm dimensions only, **±1.1**, fixed now, before lane G measures it (the margin was picked after seeing the spike data); the gripper is excluded. (3) **Observation shift:** a frame brightness/noise band, calibrated by lane G on held-out episodes; it is known to miss a camera swap. (4) **Instruction outside the declared set:** exact match; harmless paraphrases are flagged by design. (5) **Unseen init:** declared and enforced by construction (the harness picks the init state); no runtime monitor yet. Lane G builds (2) first. If the baseline check changes the fixture's behaviour, the ±1.1 margin and the band are re-checked before they ship | 2026-10-27 |
 | D11 | Coverage for the Linux-only adapter | The unit job's 100% gate covers the core; the adapter is omitted there **with a stated reason** and covered by the container integration job | default 2026-09-30 — Alex may amend |
 | D12 | Report format | Versioned JSON is canonical; Markdown is rendered from it | default 2026-09-30 |
@@ -66,9 +67,9 @@ him for more than a ruling.
 
 | Step | Work | Alex |
 |---|---|---|
-| Done | Lanes 0, A, C, D, F | — |
-| Next | E runs; B on the real adapter | **Rule D9; rule D10 from lane E's data** |
-| Then | G; H begins; publish the first result | Merges |
+| Done | Lanes 0, A, C, D, F; the E spike; B built and approved (PR #1; merges once the GHCR push permission is fixed) | — |
+| Next | G, one monitor per ruled D10 condition | Merges |
+| Then | H begins; publish the first result | Merges |
 | To 2026-11-09 | Integration and hardening; G0.1-early, full G0.1 if the monitors are green | Merges |
 
 ## Follow-ups
@@ -100,8 +101,10 @@ Known gaps and small fixes that are not yet scheduled.
 
 - **The ~6.6 GB image is tight on the 14 GB runner disk.** CI pins `ubuntu-24.04` and frees disk
   before the build; D1 names the fallback if it stops fitting.
-- **Cross-host determinism is unverified.** The spike checked 2, 4 and 8 vCPU on one host only. CI
-  against local is the first real test.
+- **Cross-host determinism under the D9b pin is shown on one host only.** No second AVX2 host, and
+  no AVX-512 host dispatching to AVX2, has yet run under the pin. `ATEN_CPU_CAPABILITY` sets only
+  ATen's own kernels; libraries that dispatch on the CPU themselves (MKL, oneDNN) are not pinned
+  by it. CI against local is the first real test.
 - **LIBERO is Linux-only.** On Windows, development runs against the fake; the real adapter runs
   only in the container.
 

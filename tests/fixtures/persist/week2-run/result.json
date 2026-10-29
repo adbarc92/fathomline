@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "manifest": {
+    "fathomline_version": "0.0.1",
+    "policy": {
+      "name": "fake-policy",
+      "revision": "0"
+    },
+    "env": {
+      "name": "fake-env",
+      "revision": "0"
+    },
+    "seeds": [
+      1000
+    ],
+    "max_steps": 10,
+    "python_version": "3.12.10",
+    "platform": "Windows-AMD64"
+  },
+  "episodes": [
+    {
+      "seed": 1000,
+      "steps": 5,
+      "success": true,
+      "sum_reward": -0.31577803787400005,
+      "max_reward": -0.0014373907873375044,
+      "action_hash": "8ec6f786127de2bc24e89fb7db3fcd8b413235995eb50e80e901973270452116",
+      "flags": []
+    }
+  ]
+}

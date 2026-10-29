@@ -69,7 +69,18 @@ RUN python -m fathomline.adapters.lerobot.warm
 # From here on, anything unpinned that reaches for the Hub fails instead of drifting.
 ENV HF_HUB_OFFLINE=1
 
+# The determinism pin (D9b). The action hash depends on torch's intra-op thread
+# count and on the instruction set its kernels dispatch to, so both are fixed:
+# the claim is bit-exact reproduction on any x86_64 host with AVX2, under these.
+# `sweep` checks torch actually runs under them (`fathomline.persist.PINNED_TORCH`)
+# and refuses to run otherwise. Set after the warm layer so it stays cached.
+ENV OMP_NUM_THREADS=2 \
+    ATEN_CPU_CAPABILITY=avx2
+
 COPY src ./src
+# The declared seed sets `sweep` runs. The working directory is /app, so its default
+# `--lock tests.lock` finds this one.
+COPY tests.lock ./
 
 ENTRYPOINT ["python", "-m", "fathomline"]
 CMD ["--help"]

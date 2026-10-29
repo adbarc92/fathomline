@@ -6,8 +6,10 @@ than reporting that it does.
 
 > **Status: early build.** `eval` runs the pinned fixture (SmolVLA on LIBERO `libero_object`
 > task 0) for real inside the container image, and prints a schema-v1 result as JSON. Outside the
-> image, where the Linux-only LeRobot stack is absent, it says so and exits **3**. `gate` and
-> `report` work on persisted results. `sweep` and `reproduce` are not built yet and exit **2**.
+> image, where the Linux-only LeRobot stack is absent, it says so and exits **3**. `sweep` runs a
+> seed set declared in [`tests.lock`](tests.lock) and persists a run directory
+> ([format](docs/run-directory.md)); `gate` and `report` work on persisted results. `reproduce`
+> is not built yet and exits **2**.
 > No result is published yet. Current state: [`docs/STATUS.md`](docs/STATUS.md).
 
 **Every claim below has a command that proves it.** A claim without one does not belong in this
@@ -22,7 +24,10 @@ file — that rule is the point of the project, so it applies to the project's o
 | Without the fixture, `eval` refuses rather than printing a result | `uv run fathomline eval; echo $?` (on a machine without `lerobot`) → prints the reason, exits **3** |
 | The gate fails closed: too small a sample, a low lower bound, or a monitor flag each fail it | `uv run fathomline gate tests/fixtures/report/flagged-run/result.json --threshold 0.8 --min-episodes 30; echo $?` → lists all three reasons, exits **1** |
 | The report is regenerated from a saved result, with no re-run, and surfaces flags | `uv run fathomline report tests/fixtures/report/flagged-run` → a Markdown report headed **FLAGGED** |
-| Unbuilt commands admit it | `uv run fathomline sweep; echo $?` → prints the reason, exits **2** |
+| `sweep` runs a declared seed set in the image and persists a run directory that `report` reads with no re-run | `docker run --rm --network none -v "$PWD/runs:/app/runs" fathomline sweep --seed-set smoke --run-dir runs/smoke && uv run fathomline report runs/smoke` |
+| Two sweeps of one seed set are equal on per-episode metrics and the action hash, and the check fails when the seed is removed (on the fake fixture, on one host) | `uv run pytest tests/test_determinism.py -v` |
+| `sweep` refuses to run off the determinism pin (ruling D9b): wrong torch thread count or kernel instruction set → exit **2**, nothing run (on the fake fixture, with a stand-in torch) | `uv run pytest tests/test_sweep_cli.py -k pin -v` |
+| Unbuilt commands admit it | `uv run fathomline reproduce; echo $?` → prints the reason, exits **2** |
 
 ## What it does, and what it will do
 
@@ -38,10 +43,13 @@ Four capabilities. Each is a claim this README only makes once a command proves 
    tested for are written down first, and a run outside them is **flagged, never silently
    reported**. The gate never passes a flagged run. Which conditions are monitored is open
    (ruling D10).
-4. **Determinism** (a goal, under investigation) — each episode records an action-trajectory hash,
-   so a run can be compared with a re-run. Same-seed runs are not yet shown to match across
-   machines: the hash has differed between CI runners with identical images (ruling D9 is open).
-   Until that is resolved, no cross-machine reproducibility claim is made.
+4. **Determinism** (pinned; cross-host evidence pending) — each episode records an
+   action-trajectory hash, and every persisted run records the host it ran on, so a run can be
+   compared with a re-run. The hash depends on torch's thread count and kernel instruction set, so
+   the image pins both, and `sweep` refuses to run off the pin (ruling D9b). D9b scopes the
+   cross-host claim to bit-exact reproduction on any x86_64 host with AVX2 under that pin, but
+   the claim is not made yet: no second host has shown a matching hash. Run-to-run equality is
+   tested on one host.
 
 The harness is the product; the policy is a fixture. It evaluates a small pretrained policy from the
 [LeRobot](https://github.com/huggingface/lerobot) ecosystem on a benchmark task that ecosystem

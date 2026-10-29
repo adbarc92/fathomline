@@ -5,7 +5,8 @@
 #   unit       the test suite, with the 100% line+branch coverage gate
 #   lint       ruff + ruff format + mypy --strict
 #   container  the image builds, and one real episode of the pinned fixture
-#              (SmolVLA on LIBERO) runs inside it and exits 0
+#              (SmolVLA on LIBERO) runs inside it and exits 0; two sweeps of the
+#              smoke seed set on the same runner compare equal
 #
 # `container` is separate because a failure there means "the shipped artifact is
 # broken", which is a different response from "a line is uncovered". It is also
@@ -80,7 +81,7 @@ jobs:
           fi
           changed=$(git diff --name-only HEAD^1 HEAD)
           echo "$changed"
-          if echo "$changed" | grep -qE '^(Dockerfile|\.dockerignore|uv\.lock|pyproject\.toml|\.github/workflows/|src/fathomline/(adapters/|core/|cli\.py|__init__\.py|__main__\.py))'; then
+          if echo "$changed" | grep -qE '^(Dockerfile|\.dockerignore|uv\.lock|tests\.lock|pyproject\.toml|\.github/workflows/|src/fathomline/(adapters/|core/|persist/|cli\.py|__init__\.py|__main__\.py))'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
@@ -192,4 +193,30 @@ jobs:
           (episode,) = document["episodes"]
           assert episode["seed"] == 1000 and episode["steps"] >= 1, episode
           print("episode:", {k: episode[k] for k in ("seed", "steps", "success", "max_reward")})
+          PY
+
+      # Lane B: run-to-run equality on one host (D9). Two sweeps of the declared smoke set, in
+      # two fresh containers on this runner, must agree on every episode's metrics and action
+      # hash. Across runners the claim is D9b's: the image sets the pin and `sweep` refuses to run
+      # off it. Each run records its host.
+      - name: sweep --seed-set smoke twice; the two runs compare equal on this host
+        if: steps.changes.outputs.run == 'true'
+        run: |
+          mkdir -p runs
+          for name in first second; do
+            docker run --rm --network none -v "$PWD/runs:/app/runs" "$IMAGE:sha-${{ github.sha }}" \
+              sweep --seed-set smoke --run-dir "runs/$name"
+          done
+          cat runs/first/run.json runs/first/result.json
+          docker run --rm -i --network none -v "$PWD/runs:/app/runs" --entrypoint python \
+            "$IMAGE:sha-${{ github.sha }}" - <<'PY'
+          from pathlib import Path
+          from fathomline.persist import compare_runs, first_divergence, read_run
+          first, second = (read_run(Path("runs", name)) for name in ("first", "second"))
+          differences = compare_runs(first.result, second.result)
+          print("\n".join(differences) or "equal: every episode's metrics and action hash")
+          for seed, a, b in zip(first.result.manifest.seeds, first.trajectories, second.trajectories):
+              if (divergence := first_divergence(a, b)) is not None:
+                  print(f"seed {seed}: trajectories first differ at {divergence}")
+          raise SystemExit(1 if differences else 0)
           PY
