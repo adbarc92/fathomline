@@ -34,7 +34,13 @@ from lerobot.utils.random_utils import set_seed
 from fathomline.adapters.lerobot import pins
 from fathomline.core.types import Action, ArtifactRef, Observation, Transition
 
-__all__ = ["LeRobotEnv", "LeRobotPolicy", "load_fixture"]
+__all__ = [
+    "THIRD_PERSON_CAMERA",
+    "LeRobotEnv",
+    "LeRobotPolicy",
+    "frame_statistics",
+    "load_fixture",
+]
 
 
 class LeRobotEnv:
@@ -170,6 +176,23 @@ class LeRobotPolicy:
                 ]
             ),
         }
+
+
+#: The third-person camera's key in the observation the env hands out.
+THIRD_PERSON_CAMERA = "observation.images.image"
+
+
+def frame_statistics(observation: Observation) -> dict[str, float]:
+    """Brightness and noise of the third-person frame, in 0-255 gray levels (D10 condition 3).
+
+    The envelope spike's two statistics, read from the tensor the policy is handed: the
+    channel-mean gray level, and the mean absolute difference between horizontal neighbours,
+    which sensor noise raises and dim light lowers.
+    """
+    image: Any = observation[THIRD_PERSON_CAMERA]
+    gray = image[0].float().mean(dim=0) * 255.0
+    noise = (gray[:, 1:] - gray[:, :-1]).abs().mean()
+    return {"image.brightness": float(gray.mean()), "image.noise": float(noise)}
 
 
 def _steps(processor: Any, kind: str) -> list[Any]:

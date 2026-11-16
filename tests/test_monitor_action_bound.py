@@ -17,6 +17,7 @@ import math
 from collections.abc import Sequence
 
 import pytest
+from conftest import SuiteFactory
 
 from fathomline.core import (
     Action,
@@ -33,10 +34,8 @@ from fathomline.monitors import (
     ARM_ACTION_LIMIT,
     LIBERO_ARM_DIMS,
     LIBERO_INSTRUCTIONS,
-    LIBERO_LOADED_PIPELINE,
     ActionBound,
     MonitorSuite,
-    fixture_monitors,
     is_flagged,
 )
 
@@ -75,8 +74,8 @@ def test_the_declared_dimensions_are_the_arm_and_exclude_the_gripper() -> None:
     assert GRIPPER not in LIBERO_ARM_DIMS
 
 
-def test_the_fixture_monitors_include_the_action_bound() -> None:
-    suite = fixture_monitors(loaded_pipeline=lambda: LIBERO_LOADED_PIPELINE)
+def test_the_fixture_monitors_include_the_action_bound(fixture_suite: SuiteFactory) -> None:
+    suite = fixture_suite()
     assert isinstance(suite, MonitorSuite)
     assert "action-bound" in suite.name
 
@@ -84,22 +83,24 @@ def test_the_fixture_monitors_include_the_action_bound() -> None:
 @pytest.mark.parametrize("dim", LIBERO_ARM_DIMS)
 @pytest.mark.parametrize("sign", [1.0, -1.0])
 def test_the_fixture_suite_holds_every_arm_dimension_to_the_ruled_bound(
-    dim: int, sign: float
+    dim: int, sign: float, fixture_suite: SuiteFactory
 ) -> None:
     # The suite the fixture is run with, not only the constants: +/-1.1 on dims 0-5.
-    suite = fixture_monitors(loaded_pipeline=lambda: LIBERO_LOADED_PIPELINE)
+    suite = fixture_suite()
     assert list(suite.on_step(_record(_arm(sign * 1.1, dim=dim)))) == []
     (flag,) = suite.on_step(_record(_arm(sign * 1.1001, dim=dim)))
     assert f"dim {dim}" in flag.reason
 
 
-def test_the_fixture_suite_does_not_monitor_the_gripper() -> None:
-    suite = fixture_monitors(loaded_pipeline=lambda: LIBERO_LOADED_PIPELINE)
+def test_the_fixture_suite_does_not_monitor_the_gripper(fixture_suite: SuiteFactory) -> None:
+    suite = fixture_suite()
     assert list(suite.on_step(_record(_arm(0.5, gripper=5.0)))) == []
 
 
-def test_the_fixture_suite_flags_lost_stats_and_passes_a_clean_step() -> None:
-    suite = fixture_monitors(loaded_pipeline=lambda: LIBERO_LOADED_PIPELINE)
+def test_the_fixture_suite_flags_lost_stats_and_passes_a_clean_step(
+    fixture_suite: SuiteFactory,
+) -> None:
+    suite = fixture_suite()
     assert list(suite.on_step(_record(_arm(1.01)))) == []
     (flag,) = suite.on_step(_record(_arm(2.27, dim=1), index=5))
     assert (flag.monitor, flag.step) == ("action-bound", 5)

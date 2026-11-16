@@ -8,7 +8,9 @@ cover them. This check, run by the CI container job, loads the D1 fixture and as
 2. the spike's lost-stats fault (`apply_unnorm_identity` in `run_envelope.py`) changes the
    `policy.unnormalizer` digest and nothing else;
 3. exchanging the two cameras in the loaded rename map changes `policy.rename_map` and
-   nothing else.
+   nothing else;
+4. the adapter's `frame_statistics` (D10 condition 3) reads seed 1000's first frame as the
+   spike measured it, inside `LIBERO_FRAME_BANDS`.
 
     docker run --rm --network none \
       -v "$PWD/docs/monitor-checks:/check:ro" -v "$PWD/docs/spike-envelope:/spike:ro" \
@@ -43,8 +45,8 @@ def main() -> int:
     sys.path.insert(0, args.spike)
     from run_envelope import apply_unnorm_identity  # the spike's fault, unchanged
 
-    from fathomline.adapters.lerobot.adapter import load_fixture
-    from fathomline.monitors import LIBERO_LOADED_PIPELINE
+    from fathomline.adapters.lerobot.adapter import frame_statistics, load_fixture
+    from fathomline.monitors import LIBERO_FRAME_BANDS, LIBERO_LOADED_PIPELINE
 
     with contextlib.redirect_stdout(sys.stderr):
         env, policy, _ = load_fixture()
@@ -65,8 +67,15 @@ def main() -> int:
     expect("clean load against the pins", _changed(pins, loaded), set())
     with contextlib.redirect_stdout(sys.stderr):
         observation = env.reset(1000)
+        stats = frame_statistics(observation)
         env.step(policy.act(observation))
     expect("after reset, act and step", _changed(pins, _fingerprint(env, policy)), set())
+
+    # The spike's frame-0 values for seed 1000 (results/baseline.jsonl): 102.18 and 5.869.
+    spike = {"image.brightness": 102.18, "image.noise": 5.869}
+    off = {k for k, v in spike.items() if abs(stats[k] - v) > 0.01}
+    off |= {k for k, (low, high) in LIBERO_FRAME_BANDS.items() if not low <= stats[k] <= high}
+    expect(f"frame statistics of seed 1000's first frame {stats}", off, set())
 
     for step in policy._preprocessor.steps:
         if type(step).__name__ == "RenameObservationsProcessorStep":
