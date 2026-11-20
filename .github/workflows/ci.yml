@@ -81,7 +81,7 @@ jobs:
           fi
           changed=$(git diff --name-only HEAD^1 HEAD)
           echo "$changed"
-          if echo "$changed" | grep -qE '^(Dockerfile|\.dockerignore|uv\.lock|tests\.lock|pyproject\.toml|\.github/workflows/|src/fathomline/(adapters/|core/|persist/|cli\.py|__init__\.py|__main__\.py))'; then
+          if echo "$changed" | grep -qE '^(Dockerfile|\.dockerignore|uv\.lock|tests\.lock|pyproject\.toml|\.github/workflows/|src/fathomline/(adapters/|core/|persist/|cli\.py|__init__\.py|__main__\.py|monitors/envelope\.py)|docs/monitor-checks/check_loaded_pipeline\.py|docs/spike-envelope/run_envelope\.py)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
@@ -220,3 +220,13 @@ jobs:
                   print(f"seed {seed}: trajectories first differ at {divergence}")
           raise SystemExit(1 if differences else 0)
           PY
+
+      # D10 condition 1 (provenance) digests the pipeline in memory, in adapter code the unit
+      # job cannot run (D11). A clean load must match the pins, and two injected faults must
+      # change exactly the component they touch.
+      - name: The loaded pipeline matches its pins
+        if: steps.changes.outputs.run == 'true'
+        run: |
+          docker run --rm --network none \
+            -v "$PWD/docs/monitor-checks:/check:ro" -v "$PWD/docs/spike-envelope:/spike:ro" \
+            --entrypoint python "$IMAGE:sha-${{ github.sha }}" /check/check_loaded_pipeline.py
