@@ -1,7 +1,7 @@
 ---
 stage: Build
-readiness: "Lanes 0, A, C, D, F merged; lane E spike done, D10 awaiting a ruling; no result published yet"
-updated: "2026-10-27"
+readiness: "Lanes 0, A, C, D, F merged; lane E spike done; D10, D14 and D9a (as D9b) ruled; Lane B in review (PR #1); public as of 2026-10-25; no result published yet"
+updated: "2026-10-28"
 name: "Fathomline"
 base_branch: "main"
 test_cmd: "uv run pytest --cov=fathomline --cov-report=term-missing"
@@ -14,40 +14,98 @@ _Canonical, living status. The **State summary** is rewritten in place each sess
 
 ## State summary
 
-**As of 2026-10-27 — Lanes 0, A, C, D and F are merged. The lane E spike is done: the envelope
-evidence is in [`SPIKE-envelope.md`](SPIKE-envelope.md), with a recommended D10 set for Alex to
-rule. B is in review; G and H are not started. Open rulings: D9a (cross-host determinism) and D10
-(declared envelope).** The plan and the rulings are in [`ROADMAP.md`](ROADMAP.md).
+**As of 2026-10-28, lanes 0, A, C, D and F are merged. The lane E spike is done: the envelope
+evidence is in [`SPIKE-envelope.md`](SPIKE-envelope.md), and D10 (the declared envelope) and D14
+(the first published result's gate) are ruled from it (PR #3). Lane B (sweep, seed sets, persisted runs) is in review as PR #1 and has been approved by its
+review agent. Its only red check is the `container` job, which fails at the GHCR push
+(`denied: permission_denied: write_package`), an owner-side package permission. G and H are not
+started. D9a is ruled as D9b: bit-exact reproduction on any x86_64 host with AVX2, under a torch
+thread and kernel pin that the image sets; PR #1 implements it.** The plan and the rulings are in [`ROADMAP.md`](ROADMAP.md).
 
-- **What exists.** The `Env` / `Policy` / `Monitor` protocols, the owned step loop with an
-  action-trajectory hash, `RunManifest` provenance and result schema v1 (Lane 0); the LeRobot
-  adapter and the container image, in which `eval` runs SmolVLA on LIBERO `libero_object` task 0
-  offline (Lane A); the Clopper-Pearson gate with a declared threshold and minimum *n* (Lane C);
-  the JSON → Markdown report (Lane D); the monitor framework, under which a flagged run is never
-  passed (Lane F); the envelope evidence, 290 episodes over 9 conditions (Lane E).
+- **What exists on `main`.**
+  - Lane 0: the `Env` / `Policy` / `Monitor` protocols, the owned step loop with an
+    action-trajectory hash, `RunManifest` provenance and result schema v1.
+  - Lane A: the LeRobot adapter and the container image, in which `eval` runs SmolVLA on LIBERO
+    `libero_object` task 0 offline.
+  - Lane C: the Clopper-Pearson gate, with a declared threshold and minimum *n*. Lane D: the
+    JSON → Markdown report. Lane F: the monitor framework, under which a flagged run is never
+    passed.
+  - Lane E: the envelope evidence, 290 episodes over 9 conditions.
 - **What the envelope spike found.** The fixture succeeds on 27/50 clean episodes ([0.39, 0.68]).
   Dim light, camera noise, 5 cm object shifts, a camera swap, lost action stats and a foreign
   instruction each cut that to 0–10%. Only the lost action stats show up in the actions.
-- **What does not exist yet.** Seeded sweeps and persisted runs (B, in review), the monitor
-  conditions (G), and `reproduce` with a published result (H). `sweep` and `reproduce` exit 2.
+- **What PR #1 adds (lane B).**
+  - `fathomline sweep --seed-set NAME` runs a seed set declared in [`tests.lock`](../tests.lock),
+    whose sets are checked against their digests.
+  - It persists a run directory that `report` and `gate` read with no re-run:
+    `result.json` (schema v1), `run.json` (run schema v1: the seed set, host facts, timings) and
+    `trajectories/`. The format is documented for lane H in [`run-directory.md`](run-directory.md).
+  - `tests/test_determinism.py` asserts run-to-run equality and fails when the seed is removed.
+  - The D9b pin: the image sets `OMP_NUM_THREADS=2` and `ATEN_CPU_CAPABILITY=avx2`, and `sweep`
+    refuses to run (exit 2) when the loaded torch is not under them.
+- **What does not exist yet.** The monitor conditions (G), and `reproduce` with a published
+  result (H). `reproduce` exits 2.
 - **History.** Lanes 0, A, C, D and F were built and reviewed as PRs #2–#8 in an earlier private
   repository, now archived. This repository starts from that code as a single commit.
+- **Determinism evidence (behind D9b).** Every hash below was measured with the checkpoint's
+  shipped `n_action_steps=50`. `n_action_steps=10` is adopted (PR #7, not yet merged) and changes
+  every action hash, so these are pre-#7 values, not ones a current run should reproduce.
+  - In two fresh containers on one host (Ryzen 7 5800X, AVX2, 2 CPUs), sweeps of the smoke set gave
+    the same action hash, `aa18c8f3…`, and the same metrics.
+  - That hash is a third value. CI runners gave `409dc548…` (EPYC 9V45, AVX-512) and `f2c89969…`
+    (an unrecorded CPU that ran about 3.5 times slower).
+  - All three agree on the metrics: success at step 124.
+  - The two CI runs were built from commits whose diff touches no numeric code.
+  - So the hash tracks the host, not the code.
+  - On the local host, `OMP_NUM_THREADS=1` reproduces `f2c89969…` bit for bit, and runs about 2.4
+    times slower.
+  - 2, 4 and 8 threads all give `aa18c8f3…`.
+  - `ATEN_CPU_CAPABILITY=default` gives a fourth hash, `47e31126…`, and succeeds one step earlier,
+    at step 123.
+  - `MKL_ENABLE_INSTRUCTIONS=SSE4_2` changes nothing.
+  - Reading: the hash depends on (a) one torch thread versus several, and (b) the instruction set
+    the ATen kernels dispatch to.
+    - The `f2c89969` runner was evidently running torch on one thread.
+    - `409dc548` (AVX-512, 2 threads) and `aa18c8f3` (AVX2, 2 threads) differ by ISA.
 
 **Next steps** — each points into [`ROADMAP.md`](ROADMAP.md)
-1. Rule D10 from [`SPIKE-envelope.md`](SPIKE-envelope.md) (recommended set at its end); lane G
-   follows, one monitor per ruled condition.
-2. Resolve D9a: the action hash has differed between CI runners with identical images, so the
-   determinism claim is not yet scoped correctly.
-3. Lane B, then lane H (`reproduce`, the first published result). Any gate threshold must
-   reckon with the fixture's 54% clean baseline.
+1. Owner: fix the GHCR package permission, so the `container` job runs the in-image sweep check.
+   Then merge PR #1.
+2. Lane G: one monitor per ruled D10 condition.
+3. Once #7 merges, record the smoke set's action hash under the D9b pin, and show the same hash
+   on a second x86_64 host before a cross-host claim is published.
+4. Lane H: build `reproduce` on the run directory, and publish the first result. Any gate
+   threshold must reckon with the fixture's 54% clean baseline.
 
 **Known limitations**
-- No determinism claim across machines until D9a is resolved.
-- No `tests.lock` yet; it arrives with lane B.
+- The D9b cross-host claim rests on one host so far: no second host has yet run under the pin.
+- Run-to-run equality on the real fixture is shown on one local host. CI cannot run the in-image
+  check until the GHCR push works.
 
 ---
 
 ## Session log
+
+### 2026-10-28 — Lane B: main merged in; the D9b pin
+
+- Merged `main` into PR #1 twice: lane E (`docs/STATUS.md` conflicted) and the D10/D14 rulings
+  (`docs/ROADMAP.md` conflicted). Both sides were kept each time.
+- Alex ruled D9a as D9b. The image now sets `OMP_NUM_THREADS=2` and `ATEN_CPU_CAPABILITY=avx2`,
+  and `sweep` refuses to run off the pin, test-first (the refusal tests were seen red).
+- State delta: D9a is ruled; the action hashes recorded so far are marked as pre-#7 values.
+
+### 2026-10-27 — Lane B: sweep, seed sets, persisted runs (PR #1)
+
+- Built `sweep`, `tests.lock`, the run directory (`persist/`) and the determinism tests, test-first.
+  - The equality test was seen red: `FakePolicy` was seeded with a constant, so a policy that lost
+    its seed was invisible.
+  - The fake now draws from OS entropy until it is reset.
+  - Removing the seed from the loop turns three tests red.
+- A separate review agent requested changes: NaN actions did not round-trip, episode and manifest
+  seeds went unchecked, and the CI trigger missed `persist/`. All were fixed, and it then approved.
+- Measured on the real fixture, locally: same-host equality holds, and a third host hash was
+  recorded (see the State summary).
+- State delta: Lane B is in review; D9a has new evidence.
 
 ### 2026-10-27 — Lane E: envelope evidence spike
 

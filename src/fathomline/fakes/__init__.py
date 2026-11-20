@@ -71,7 +71,10 @@ class FakePolicy:
     ref = ArtifactRef(name="fake-policy", revision="0")
 
     def __init__(self) -> None:
-        self._rng = random.Random(0)
+        # Unseeded until `reset(seed)`: from OS entropy, not a constant, so a loop
+        # that fails to pass the seed on produces different runs, and the
+        # determinism test can see it (Lane B's done-when).
+        self._rng = random.Random()
 
     def reset(self, seed: int) -> None:
         self._rng = random.Random(seed)

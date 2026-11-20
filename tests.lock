@@ -1,0 +1,31 @@
+# tests.lock: the declared seed sets `fathomline sweep --seed-set <name>` may run.
+#
+# A sweep never makes up its seeds. Each set records the SHA-256 of its seeds in
+# order (`fathomline.persist.seed_digest`), and a set whose seeds no longer match
+# its digest is refused, so a seed set changes only on purpose: edit the seeds,
+# then record the digest the refusal prints. Every run directory records the
+# set's name, seeds and digest, so a re-run can show it ran the same declaration.
+#
+# Seeds must be unique: a repeated seed would count one episode twice toward a
+# gate's minimum n.
+
+version = 1
+
+[seed_sets.smoke]
+description = "One episode at LeRobot's default seed, the seed every spike measurement used. The per-PR container smoke."
+seeds = [1000]
+digest = "40510175845988f13f6162ed8526f0b09f73384467fa855e1e79b44a56562a58"
+
+[seed_sets.full]
+description = """\
+Fifty episodes, one per LIBERO libero_object init state: the adapter starts an \
+episode at init state seed % 50, so seeds 1000-1049 visit states 0-49 once each. \
+A candidate for the published sweep; its size is Lane H's call against the D6 gate."""
+seeds = [
+    1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009,
+    1010, 1011, 1012, 1013, 1014, 1015, 1016, 1017, 1018, 1019,
+    1020, 1021, 1022, 1023, 1024, 1025, 1026, 1027, 1028, 1029,
+    1030, 1031, 1032, 1033, 1034, 1035, 1036, 1037, 1038, 1039,
+    1040, 1041, 1042, 1043, 1044, 1045, 1046, 1047, 1048, 1049,
+]
+digest = "1cc46bc59d444ea0d3b03cc4980bb2f1c8dd10b896b720dbff7ab0b1f11f30f7"
